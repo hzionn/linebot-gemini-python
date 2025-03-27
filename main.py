@@ -1,13 +1,7 @@
-from linebot.models import (
-    MessageEvent, TextSendMessage
-)
-from linebot.exceptions import (
-    InvalidSignatureError
-)
+from linebot.models import MessageEvent, TextSendMessage
+from linebot.exceptions import InvalidSignatureError
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
-from linebot import (
-    AsyncLineBotApi, WebhookParser
-)
+from linebot import AsyncLineBotApi, WebhookParser
 from fastapi import Request, FastAPI, HTTPException
 import os
 import sys
@@ -23,25 +17,23 @@ from langchain_core.prompts import ChatPromptTemplate
 
 
 # get channel_secret and channel_access_token from your environment variable
-channel_secret = os.getenv('ChannelSecret', None)
-channel_access_token = os.getenv('ChannelAccessToken', None)
-imgage_prompt = '''
+channel_secret = os.getenv("ChannelSecret", None)
+channel_access_token = os.getenv("ChannelAccessToken", None)
+image_prompt = """
 Describe this image with scientific detail, reply in zh-TW:
-'''
+"""
 
-# Vertex AI needs a project ID and possibly authentication
-google_project_id = os.getenv('GOOGLE_PROJECT_ID')
-# Location for Vertex AI resources, e.g., "us-central1"
-google_location = os.getenv('GOOGLE_LOCATION', 'us-central1')
+google_project_id = os.getenv("GOOGLE_PROJECT_ID")
+google_location = os.getenv("GOOGLE_LOCATION", "us-central1")
 
 if channel_secret is None:
-    print('Specify ChannelSecret as environment variable.')
+    print("Specify ChannelSecret as environment variable.")
     sys.exit(1)
 if channel_access_token is None:
-    print('Specify ChannelAccessToken as environment variable.')
+    print("Specify ChannelAccessToken as environment variable.")
     sys.exit(1)
 if google_project_id is None:
-    print('Specify GOOGLE_PROJECT_ID as environment variable.')
+    print("Specify GOOGLE_PROJECT_ID as environment variable.")
     sys.exit(1)
 
 # Initialize the FastAPI app for LINEBot
@@ -52,7 +44,6 @@ line_bot_api = AsyncLineBotApi(channel_access_token, async_http_client)
 parser = WebhookParser(channel_secret)
 
 # Create LangChain Vertex AI model instances
-# For Vertex AI, we use "gemini-2.0-flash" instead of "gemini-2.0-flash-lite"
 text_model = ChatVertexAI(
     model_name="gemini-2.0-flash-001",
     project=google_project_id,
@@ -70,7 +61,7 @@ vision_model = ChatVertexAI(
 
 @app.post("/")
 async def handle_callback(request: Request):
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers["X-Line-Signature"]
 
     # get request body as text
     body = await request.body()
