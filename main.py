@@ -57,7 +57,14 @@ text_model = ChatVertexAI(
     model_name="gemini-2.0-flash-001",
     project=google_project_id,
     location=google_location,
-    max_output_tokens=1024
+    max_output_tokens=1024,
+)
+
+vision_model = ChatVertexAI(
+    model_name="gemini-2.0-flash-001",
+    project=google_project_id,
+    location=google_location,
+    max_output_tokens=1024,
 )
 
 
@@ -78,21 +85,31 @@ async def handle_callback(request: Request):
         if not isinstance(event, MessageEvent):
             continue
 
-        if (event.message.type == "text"):
-            # Process text message using LangChain with Vertex AI
-            msg = event.message.text
-            response = generate_text_with_langchain(f'{msg}')
-            reply_msg = TextSendMessage(text=response)
-            await line_bot_api.reply_message(
-                event.reply_token,
-                reply_msg
+        try:
+            if event.message.type == "text":
+                # Process text message using LangChain with Vertex AI
+                msg = event.message.text
+                response = generate_text_with_langchain(f"{msg}")
+                reply_msg = TextSendMessage(text=response)
+                await line_bot_api.reply_message(event.reply_token, reply_msg)
+            elif event.message.type == "image":
+                message_content = await line_bot_api.get_message_content(
+                    event.message.id
+                )
+                image = PIL.Image.open(BytesIO(await message_content.read()))
+                response = await process_image_with_gemini(image)
+                reply_msg = TextSendMessage(text=response)
+                await line_bot_api.reply_message(event.reply_token, reply_msg)
+            else:
+                continue
+        except Exception as e:
+            print(f"Error processing event: {e}")
+            error_msg = TextSendMessage(
+                text="An error occurred while processing your request."
             )
-        elif (event.message.type == "image"):
-            return 'OK'
-        else:
-            continue
+            await line_bot_api.reply_message(event.reply_token, error_msg)
 
-    return 'OK'
+    return "OK"
 
 
 def generate_text_with_langchain(prompt):
@@ -100,14 +117,51 @@ def generate_text_with_langchain(prompt):
     Generate a text completion using LangChain with Vertex AI model.
     """
     # Create a chat prompt template with system instructions
-    prompt_template = ChatPromptTemplate.from_messages([
-        SystemMessage(
-            content="You are a helpful assistant. For language, please use either en-US or zh-TW."),
-        HumanMessage(content=prompt)
-    ])
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            SystemMessage(
+                content="You are a helpful assistant. For language, please use either en-US or zh-TW."
+            ),
+            HumanMessage(content=prompt),
+        ]
+    )
 
     # Format the prompt and call the model
     formatted_prompt = prompt_template.format_messages()
     response = text_model.invoke(formatted_prompt)
+
+    return response.content
+
+
+async def process_image_with_gemini(image):
+    """
+    Process image using Gemini Vision model and return the description.
+    """
+    # Convert PIL Image to base64
+    buffered = BytesIO()
+    image.save(buffered, format="JPEG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+
+    # Create chat prompt template with system instructions and image
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            SystemMessage(
+                content="You are a helpful assistant. Analyze the image and provide details."
+            ),
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": image_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": f"data:image/jpeg;base64,{img_str}",
+                    },
+                ]
+            ),
+        ]
+    )
+
+    # Format the prompt and call the vision model
+    formatted_prompt = prompt_template.format_messages()
+    response = vision_model.invoke(formatted_prompt)
 
     return response.content
