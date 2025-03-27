@@ -81,7 +81,7 @@ async def handle_callback(request: Request):
         if (event.message.type == "text"):
             # Process text message using LangChain with Vertex AI
             msg = event.message.text
-            response = generate_text_with_langchain(f'{msg}, reply in zh-TW:')
+            response = generate_text_with_langchain(f'{msg}')
             reply_msg = TextSendMessage(text=response)
             await line_bot_api.reply_message(
                 event.reply_token,
@@ -102,7 +102,7 @@ def generate_text_with_langchain(prompt):
     # Create a chat prompt template with system instructions
     prompt_template = ChatPromptTemplate.from_messages([
         SystemMessage(
-            content="You are a helpful assistant that responds in Traditional Chinese (zh-TW)."),
+            content="You are a helpful assistant that responds in either English (en-US) or Traditional Chinese (zh-TW)."),
         HumanMessage(content=prompt)
     ])
 
