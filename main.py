@@ -52,7 +52,7 @@ text_model = ChatVertexAI(
 )
 
 vision_model = ChatVertexAI(
-    model_name="gemini-2.0-flash-001",
+    model_name="gemini-1.5-pro-002",
     project=google_project_id,
     location=google_location,
     max_output_tokens=1024,
@@ -88,7 +88,7 @@ async def handle_callback(request: Request):
                     message_content = await line_bot_api.get_message_content(
                         event.message.id
                     )
-                    image_data = await message_content.read()
+                    image_data = message_content.content
                     image = PIL.Image.open(BytesIO(image_data))
 
                     # Add debug print
