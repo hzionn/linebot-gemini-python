@@ -2,11 +2,7 @@
 
 ## Project Background
 
-This project is a LINE bot that uses Google's Vertex AI Gemini models through LangChain to generate responses to both text and image inputs. The bot can answer questions in Traditional Chinese and provide detailed descriptions of images.
-
-## Screenshot
-
-![image](https://github.com/kkdai/linebot-gemini-python/assets/2252691/466fbe7c-e704-45f9-8584-91cfa2c99e48)
+This project is a LINE bot that uses Google's Vertex AI Gemini models through LangChain to generate responses to both text and image inputs.
 
 ## Features
 
@@ -53,16 +49,6 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
    ```
 
 6. Set up your LINE bot webhook URL to point to your server's endpoint.
-
-## Usage
-
-### Text Processing
-
-Send any text message to the LINE bot, and it will use Vertex AI's Gemini model to generate a response in Traditional Chinese.
-
-### Image Processing
-
-Send an image to the bot, and it will analyze and describe the image with scientific detail in Traditional Chinese.
 
 ## Deployment Options
 
