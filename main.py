@@ -102,7 +102,7 @@ def generate_text_with_langchain(prompt):
     # Create a chat prompt template with system instructions
     prompt_template = ChatPromptTemplate.from_messages([
         SystemMessage(
-            content="You are a helpful assistant that responds in either English (en-US) or Traditional Chinese (zh-TW)."),
+            content="You are a helpful assistant that responds in either English (en-US) or Traditional Chinese (zh-TW), depends on the user's language."),
         HumanMessage(content=prompt)
     ])
 
