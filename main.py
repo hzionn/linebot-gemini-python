@@ -20,7 +20,7 @@ from langchain_core.prompts import ChatPromptTemplate
 channel_secret = os.getenv("ChannelSecret", None)
 channel_access_token = os.getenv("ChannelAccessToken", None)
 image_prompt = """
-Describe this image with scientific detail, reply in zh-TW:
+Describe this image with scientific detail:
 """
 
 google_project_id = os.getenv("GOOGLE_PROJECT_ID")
@@ -84,17 +84,34 @@ async def handle_callback(request: Request):
                 reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
             elif event.message.type == "image":
-                message_content = await line_bot_api.get_message_content(
-                    event.message.id
-                )
-                image = PIL.Image.open(BytesIO(await message_content.read()))
-                response = await process_image_with_gemini(image)
-                reply_msg = TextSendMessage(text=response)
-                await line_bot_api.reply_message(event.reply_token, reply_msg)
+                try:
+                    message_content = await line_bot_api.get_message_content(
+                        event.message.id
+                    )
+                    image_data = await message_content.read()
+                    image = PIL.Image.open(BytesIO(image_data))
+
+                    # Add debug print
+                    print("Processing image...")
+
+                    response = await process_image_with_gemini(image)
+
+                    if not response:
+                        raise ValueError("Empty response from Gemini")
+
+                    reply_msg = TextSendMessage(text=response)
+                    await line_bot_api.reply_message(event.reply_token, reply_msg)
+
+                except Exception as img_error:
+                    print(f"Image processing error: {str(img_error)}")
+                    error_msg = TextSendMessage(
+                        text=f"Image processing failed: {str(img_error)}"
+                    )
+                    await line_bot_api.reply_message(event.reply_token, error_msg)
             else:
                 continue
         except Exception as e:
-            print(f"Error processing event: {e}")
+            print(f"Error processing event: {str(e)}")
             error_msg = TextSendMessage(
                 text="An error occurred while processing your request."
             )
@@ -128,31 +145,39 @@ async def process_image_with_gemini(image):
     """
     Process image using Gemini Vision model and return the description.
     """
-    # Convert PIL Image to base64
-    buffered = BytesIO()
-    image.save(buffered, format="JPEG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
+    try:
+        # Convert PIL Image to base64
+        buffered = BytesIO()
+        image.save(buffered, format="JPEG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
 
-    # Create chat prompt template with system instructions and image
-    prompt_template = ChatPromptTemplate.from_messages(
-        [
-            SystemMessage(
-                content="You are a helpful assistant. Analyze the image and provide details."
-            ),
-            HumanMessage(
-                content=[
-                    {"type": "text", "text": image_prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": f"data:image/jpeg;base64,{img_str}",
-                    },
-                ]
-            ),
-        ]
-    )
+        # Create chat prompt template with system instructions and image
+        prompt_template = ChatPromptTemplate.from_messages(
+            [
+                SystemMessage(
+                    content="You are a scientific advisor specialized in detailed image analysis."
+                ),
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": image_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": f"data:image/jpeg;base64,{img_str}",
+                        },
+                    ]
+                ),
+            ]
+        )
 
-    # Format the prompt and call the vision model
-    formatted_prompt = prompt_template.format_messages()
-    response = vision_model.invoke(formatted_prompt)
+        # Format the prompt and call the vision model
+        formatted_prompt = prompt_template.format_messages()
+        response = vision_model.invoke(formatted_prompt)
 
-    return response.content
+        if not response.content:
+            raise ValueError("Empty response from model")
+
+        return response.content
+
+    except Exception as e:
+        print(f"Image processing error in process_image_with_gemini: {str(e)}")
+        raise
