@@ -6,3 +6,4 @@ PRIVATE
 *.zip
 google-cloud-sdk/
 secrets/
+.github/
