@@ -38,17 +38,23 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
 
 4. Install the required dependencies:
 
-   ```
+   ```bash
    pip install -r requirements.txt
    ```
 
 5. Start the FastAPI server:
 
-   ```
+   ```bash
    uvicorn main:app --reload
    ```
 
-6. Set up your LINE bot webhook URL to point to your server's endpoint.
+6. Start the ngrok tunnel (if using local development):
+
+   ```bash
+   ngrok http 8000
+   ```
+
+7. Set up your LINE bot webhook URL to point to your server's endpoint.
 
 ## Deployment Options
 
@@ -61,13 +67,13 @@ Use ngrok or similar tools to expose your local server to the internet for webho
 1. Install the Google Cloud SDK and authenticate with your Google Cloud account.
 2. Build the Docker image:
 
-   ```
+   ```bash
    gcloud builds submit --tag gcr.io/$GOOGLE_PROJECT_ID/linebot-gemini
    ```
 
 3. Deploy the Docker image to Cloud Run:
 
-   ```
+   ```bash
    gcloud run deploy linebot-gemini --image gcr.io/$GOOGLE_PROJECT_ID/linebot-gemini --platform managed --region $GOOGLE_LOCATION --allow-unauthenticated
    ```
 
