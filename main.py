@@ -1,6 +1,7 @@
 import base64
 import os
 import sys
+from collections import defaultdict, deque
 from io import BytesIO
 from pathlib import Path
 
@@ -8,6 +9,9 @@ import aiohttp
 import PIL.Image
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from langchain.schema.messages import HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_vertexai import ChatVertexAI
 from linebot import AsyncLineBotApi, WebhookParser
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import InvalidSignatureError
@@ -27,10 +31,6 @@ else:
     raise FileNotFoundError(
         f"Google Application Credentials file not found at {credentials_path}"
     )
-
-from langchain.schema.messages import HumanMessage, SystemMessage
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_vertexai import ChatVertexAI
 
 # get channel_secret and channel_access_token from your environment variable
 channel_secret = os.getenv("ChannelSecret", None)
@@ -71,12 +71,37 @@ vision_model = ChatVertexAI(
     max_output_tokens=1024,
 )
 
+# Store up to 10 conversations per user (user_id: deque of (role, message))
+max_chat_history = int(os.getenv("MAX_CHAT_HISTORY", "10"))
+conversation_history = defaultdict(lambda: deque(maxlen=max_chat_history))
+
+
+def get_user_id(event):
+    # For LINE, userId is in event.source.user_id
+    return getattr(event.source, "user_id", None)
+
+
+def build_langchain_history(user_id):
+    """
+    Build LangChain message history from stored conversation.
+    """
+    history = []
+    for role, msg in conversation_history[user_id]:
+        if role == "user":
+            history.append(HumanMessage(content=msg))
+        else:
+            history.append(SystemMessage(content=msg))
+    return history
+
+
+def add_to_history(user_id, role, msg):
+    conversation_history[user_id].append((role, msg))
+
 
 @app.post("/")
 async def handle_callback(request: Request):
     signature = request.headers["X-Line-Signature"]
-
-    body = await request.body()  # get text
+    body = await request.body()
     body = body.decode()
 
     try:
@@ -88,47 +113,46 @@ async def handle_callback(request: Request):
         if not isinstance(event, MessageEvent):
             continue
 
+        user_id = get_user_id(event)
+        if not user_id:
+            continue
+
         try:
             if event.message.type == "text":
-                # Process text message using LangChain with Vertex AI
                 msg = event.message.text
-                response = generate_text_with_langchain(f"{msg}")
-                reply_msg = TextSendMessage(text=response)
+                add_to_history(user_id, "user", msg)
+                history = build_langchain_history(user_id)
+                history = [
+                    SystemMessage(content="You are a helpful assistant.")
+                ] + history
+                response = text_model.invoke(history)
+                add_to_history(user_id, "assistant", response.content)
+                reply_msg = TextSendMessage(text=response.content)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
             elif event.message.type == "image":
                 try:
                     print("Starting image processing...")
-
-                    # Get message content and properly await it
                     message_content = await line_bot_api.get_message_content(
                         event.message.id
                     )
                     print("✓ Image received from LINE")
-
-                    # Await the content
                     image_data = await message_content.content
                     image = PIL.Image.open(BytesIO(image_data))
                     print(
                         f"✓ Image converted to PIL format: {image.format} {image.size}"
                     )
-
                     print("Processing with Gemini Vision...")
                     response = await process_image_with_gemini(image)
-
                     if not response:
                         raise ValueError("Empty response from Gemini")
                     print("✓ Gemini Vision processing complete")
-
+                    add_to_history(user_id, "user", "[Image]")
+                    add_to_history(user_id, "assistant", response)
                     reply_msg = TextSendMessage(text=response)
                     await line_bot_api.reply_message(event.reply_token, reply_msg)
                     print("✓ Response sent to LINE")
-
                 except Exception as img_error:
                     print(f"❌ Image processing error: {str(img_error)}")
-                    error_msg = TextSendMessage(
-                        text=f"Image processing failed: {str(img_error)}"
-                    )
-                    await line_bot_api.reply_message(event.reply_token, error_msg)
             else:
                 continue
         except Exception as e:
@@ -148,9 +172,7 @@ def generate_text_with_langchain(prompt):
     # Create a chat prompt template with system instructions
     prompt_template = ChatPromptTemplate.from_messages(
         [
-            SystemMessage(
-                content="You are a helpful assistant. For language, please use either en-US or zh-TW depends on the user's language."
-            ),
+            SystemMessage(content="You are a helpful assistant."),
             HumanMessage(content=prompt),
         ]
     )
@@ -172,7 +194,6 @@ async def process_image_with_gemini(image):
         image.save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
 
-        # Create chat prompt template with system instructions and image
         prompt_template = ChatPromptTemplate.from_messages(
             [
                 SystemMessage(
@@ -183,8 +204,7 @@ async def process_image_with_gemini(image):
                 ),
                 HumanMessage(
                     content=(
-                        "Please describe this image:\n"
-                        f"[Image Base64: {img_str}]"
+                        "Please describe this image:\n" f"[Image Base64: {img_str}]"
                     )
                 ),
             ]
