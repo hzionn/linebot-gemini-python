@@ -1,27 +1,41 @@
-from linebot.models import MessageEvent, TextSendMessage
-from linebot.exceptions import InvalidSignatureError
-from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
-from linebot import AsyncLineBotApi, WebhookParser
-from fastapi import Request, FastAPI, HTTPException
+import base64
 import os
 import sys
 from io import BytesIO
+from pathlib import Path
+
 import aiohttp
 import PIL.Image
-import base64
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
+from linebot import AsyncLineBotApi, WebhookParser
+from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextSendMessage
 
-# Import LangChain components with Vertex AI
-from langchain_google_vertexai import ChatVertexAI
+# Load environment variables first
+load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent
+credentials_path = Path(
+    os.path.join(BASE_DIR, "secrets/service-account-key.json")
+).resolve()
+
+if credentials_path.is_file():
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path)
+else:
+    raise FileNotFoundError(
+        f"Google Application Credentials file not found at {credentials_path}"
+    )
+
 from langchain.schema.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
-
+from langchain_google_vertexai import ChatVertexAI
 
 # get channel_secret and channel_access_token from your environment variable
 channel_secret = os.getenv("ChannelSecret", None)
 channel_access_token = os.getenv("ChannelAccessToken", None)
-image_prompt = """
-Describe this image with scientific detail:
-"""
+# image_prompt = "Describe this image with scientific detail."
 
 google_project_id = os.getenv("GOOGLE_PROJECT_ID")
 google_location = os.getenv("GOOGLE_LOCATION", "us-central1")
@@ -45,14 +59,13 @@ parser = WebhookParser(channel_secret)
 
 # Create LangChain Vertex AI model instances
 text_model = ChatVertexAI(
-    model_name="gemini-2.0-flash-001",
+    model_name=os.getenv("GEMINI_TEXT_MODEL"),
     project=google_project_id,
     location=google_location,
     max_output_tokens=1024,
 )
-
 vision_model = ChatVertexAI(
-    model_name="gemini-1.5-pro-002",
+    model_name=os.getenv("GEMINI_VISION_MODEL"),
     project=google_project_id,
     location=google_location,
     max_output_tokens=1024,
@@ -63,8 +76,7 @@ vision_model = ChatVertexAI(
 async def handle_callback(request: Request):
     signature = request.headers["X-Line-Signature"]
 
-    # get request body as text
-    body = await request.body()
+    body = await request.body()  # get text
     body = body.decode()
 
     try:
@@ -85,25 +97,34 @@ async def handle_callback(request: Request):
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
             elif event.message.type == "image":
                 try:
+                    print("Starting image processing...")
+
+                    # Get message content and properly await it
                     message_content = await line_bot_api.get_message_content(
                         event.message.id
                     )
-                    image_data = message_content.content
+                    print("✓ Image received from LINE")
+
+                    # Await the content
+                    image_data = await message_content.content
                     image = PIL.Image.open(BytesIO(image_data))
+                    print(
+                        f"✓ Image converted to PIL format: {image.format} {image.size}"
+                    )
 
-                    # Add debug print
-                    print("Processing image...")
-
+                    print("Processing with Gemini Vision...")
                     response = await process_image_with_gemini(image)
 
                     if not response:
                         raise ValueError("Empty response from Gemini")
+                    print("✓ Gemini Vision processing complete")
 
                     reply_msg = TextSendMessage(text=response)
                     await line_bot_api.reply_message(event.reply_token, reply_msg)
+                    print("✓ Response sent to LINE")
 
                 except Exception as img_error:
-                    print(f"Image processing error: {str(img_error)}")
+                    print(f"❌ Image processing error: {str(img_error)}")
                     error_msg = TextSendMessage(
                         text=f"Image processing failed: {str(img_error)}"
                     )
@@ -128,7 +149,7 @@ def generate_text_with_langchain(prompt):
     prompt_template = ChatPromptTemplate.from_messages(
         [
             SystemMessage(
-                content="You are a helpful assistant. For language, please use either en-US or zh-TW."
+                content="You are a helpful assistant. For language, please use either en-US or zh-TW depends on the user's language."
             ),
             HumanMessage(content=prompt),
         ]
@@ -155,16 +176,16 @@ async def process_image_with_gemini(image):
         prompt_template = ChatPromptTemplate.from_messages(
             [
                 SystemMessage(
-                    content="You are a scientific advisor specialized in detailed image analysis."
+                    content=(
+                        "You are a scientific advisor specialized in detailed image analysis."
+                        "Please provide analysis in English (en-US)."
+                    )
                 ),
                 HumanMessage(
-                    content=[
-                        {"type": "text", "text": image_prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": f"data:image/jpeg;base64,{img_str}",
-                        },
-                    ]
+                    content=(
+                        "Please describe this image:\n"
+                        f"[Image Base64: {img_str}]"
+                    )
                 ),
             ]
         )
