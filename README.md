@@ -10,6 +10,7 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
 - Image analysis with scientific detail in Traditional Chinese
 - Integration with LINE Messaging API for easy mobile access
 - Built with FastAPI for efficient asynchronous processing
+- Chat history management
 
 ## Technologies Used
 
@@ -20,6 +21,7 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
 - LangChain
 - Aiohttp
 - PIL (Python Imaging Library)
+- Ngrok (for local development)
 
 ## Setup
 
