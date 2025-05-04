@@ -70,7 +70,7 @@ vision_model = ChatVertexAI(
     max_output_tokens=1024,
 )
 
-# Store up to 10 conversations per user (user_id: deque of (role, message))
+# Store up to 10 conversations (by default) per user (user_id: deque of (role, message))
 max_chat_history = int(os.getenv("MAX_CHAT_HISTORY", "10"))
 conversation_history = defaultdict(lambda: deque(maxlen=max_chat_history))
 
