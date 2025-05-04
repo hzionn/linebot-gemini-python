@@ -17,7 +17,6 @@ from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextSendMessage
 
-# Load environment variables first
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
