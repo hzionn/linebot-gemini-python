@@ -27,11 +27,13 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
 
 1. Clone the repository to your local machine.
 2. Set up Google Cloud:
+
    - Create a Google Cloud project
    - Enable Vertex AI API
    - Set up authentication (service account or application default credentials)
 
 3. Set the following environment variables:
+
    - `ChannelSecret`: Your LINE channel secret
    - `ChannelAccessToken`: Your LINE channel access token
    - `GOOGLE_PROJECT_ID`: Your Google Cloud Project ID
