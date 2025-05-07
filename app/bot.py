@@ -7,35 +7,24 @@ from io import BytesIO
 import aiohttp
 import PIL.Image
 from fastapi import FastAPI, HTTPException, Request
-
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_vertexai import ChatVertexAI
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.tools import StructuredTool
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_vertexai import ChatVertexAI
 from linebot import AsyncLineBotApi, WebhookParser
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextSendMessage
 from pydantic import BaseModel, Field
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_core.prompts import ChatPromptTemplate
 
-from app.config import (
-    CHANNEL_ACCESS_TOKEN,
-    CHANNEL_SECRET,
-    GEMINI_TEXT_MODEL,
-    GEMINI_VISION_MODEL,
-    GOOGLE_LOCATION,
-    GOOGLE_PROJECT_ID,
-    MAX_CHAT_HISTORY,
-)
+from app.config import (CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET,
+                        GEMINI_TEXT_MODEL, GEMINI_VISION_MODEL,
+                        GOOGLE_LOCATION, GOOGLE_PROJECT_ID, MAX_CHAT_HISTORY)
 from app.prompt import TEXT_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
-from app.utils import (
-    add_to_history,
-    get_user_id,
-    # resize_image,
-    build_langchain_history,
-    cleanup_inactive_histories,
-)
+from app.utils import (add_to_history,  # resize_image,
+                       build_langchain_history, cleanup_inactive_histories,
+                       get_user_id)
 
 # Global variables for LINE Bot
 line_bot_api = None
@@ -57,12 +46,17 @@ last_cleanup = datetime.now()
 
 class GetCurrentTimeSchema(BaseModel):
     """Get the current time in a specific timezone."""
-    timezone: str = Field(default="Asia/Taipei", description="Timezone name, e.g., Asia/Taipei")
+
+    timezone: str = Field(
+        default="Asia/Taipei", description="Timezone name, e.g., Asia/Taipei"
+    )
 
 
 def get_current_time_pydantic(timezone: str = "Asia/Taipei") -> str:
     from datetime import datetime
+
     import pytz
+
     tz = pytz.timezone(timezone)
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -104,11 +98,13 @@ async def lifespan(app: FastAPI):
     )
 
     # Create the agent prompt
-    agent_prompt = ChatPromptTemplate.from_messages([
-        ("system", TEXT_SYSTEM_PROMPT),
-        ("human", "{input}"),
-        ("placeholder", "{agent_scratchpad}")
-    ])
+    agent_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", TEXT_SYSTEM_PROMPT),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ]
+    )
 
     # Create the agent
     agent = create_tool_calling_agent(

@@ -1,7 +1,9 @@
-from typing import Any, List, Optional
 from datetime import datetime
+from typing import Any, List, Optional
+
 import PIL.Image
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (AIMessage, HumanMessage, SystemMessage,
+                                     ToolMessage)
 from linebot.models import MessageEvent
 
 
@@ -27,7 +29,11 @@ def build_langchain_history(user_id: str, conversation_history: dict) -> List[An
             elif role == "tool":
                 # Expect msg to be a dict with 'content' and 'tool_call_id'
                 if isinstance(msg, dict) and "content" in msg and "tool_call_id" in msg:
-                    history.append(ToolMessage(content=msg["content"], tool_call_id=msg["tool_call_id"]))
+                    history.append(
+                        ToolMessage(
+                            content=msg["content"], tool_call_id=msg["tool_call_id"]
+                        )
+                    )
                 else:
                     history.append(SystemMessage(content=str(msg)))
             else:
@@ -47,7 +53,13 @@ def add_to_history(
         print(f"Error adding to history for user {user_id}: {str(e)}")
 
 
-def cleanup_inactive_histories(last_cleanup, last_activity, CLEANUP_INTERVAL, INACTIVE_TIMEOUT, conversation_history):
+def cleanup_inactive_histories(
+    last_cleanup,
+    last_activity,
+    CLEANUP_INTERVAL,
+    INACTIVE_TIMEOUT,
+    conversation_history,
+):
     """Remove conversation histories for users inactive for more than INACTIVE_TIMEOUT."""
     now = datetime.now()
 
