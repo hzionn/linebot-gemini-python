@@ -24,6 +24,7 @@ from app.config import (
     GOOGLE_PROJECT_ID,
     MAX_CHAT_HISTORY,
 )
+from app.prompt import TEXT_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
 from app.utils import add_to_history, get_user_id, resize_image, build_langchain_history
 
 # Global variables for LINE Bot
@@ -37,9 +38,8 @@ conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
 last_activity = defaultdict(lambda: datetime.now())
 
 # Configure history cleanup settings
-INACTIVE_TIMEOUT = timedelta(
-    hours=24
-)  # Time after which inactive user history is cleared
+# Time after which inactive user history is cleared
+INACTIVE_TIMEOUT = timedelta(hours=24)
 CLEANUP_INTERVAL = timedelta(hours=1)  # How often to run the cleanup
 last_cleanup = datetime.now()
 
@@ -100,9 +100,7 @@ def cleanup_inactive_histories():
 
     last_cleanup = now
     if inactive_users:
-        print(
-            f"Cleaned up conversation history for {len(inactive_users)} inactive users"
-        )
+        print(f"Cleaned up chat for {len(inactive_users)} inactive users")
 
 
 async def process_text_to_LLM(text: str, user_id: str) -> str:
@@ -111,7 +109,7 @@ async def process_text_to_LLM(text: str, user_id: str) -> str:
         return "Text model not initialized."
     history = build_langchain_history(user_id, conversation_history)
     history.append(HumanMessage(content=text))
-    history = [SystemMessage(content="You are a helpful assistant.")] + history
+    history = [SystemMessage(content=TEXT_SYSTEM_PROMPT)] + history
     response = text_model.invoke(history)
     return str(response.content)
 
@@ -126,44 +124,29 @@ async def process_image_to_LLM(image: PIL.Image.Image, user_id: str) -> str:
         img_str = base64.b64encode(buffered.getvalue()).decode()
 
         history = build_langchain_history(user_id, conversation_history)
-        history.append(
-            HumanMessage(
-                content=[
-                    {
-                        "type": "text",
-                        "text": "Please analyze this image and provide a structured summary.",
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{img_str}"},
-                    },
-                ]
-            )
-        )
-        history = [
-            SystemMessage(
-                content=(
-                    "You are a scientific advisor specialized in detailed image analysis. "
-                    "The following image is a general image. "
-                    "Please describe the following details in English (en-US):\n"
-                    "- Notable objects or elements\n"
-                    "- Context or setting\n"
-                    "- Any other relevant details\n"
-                    "If any information is missing or unclear, state so. "
-                    "Keep your response concise and under 200 words."
-                )
-            )
-        ] + history
+        message_content = [
+            {
+                "type": "text",
+                "text": "Please analyze this image and provide a structured summary.",
+            },
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{img_str}"},
+            },
+        ]
 
+        history.append(HumanMessage(content=message_content))
+        history = [SystemMessage(content=VISION_SYSTEM_PROMPT)] + history
         response = vision_model.invoke(history)
 
-        if not response.content:
+        if not response or not response.content:
             raise ValueError("Empty response from model")
 
         return str(response.content)
 
     except Exception as e:
         print(f"Image processing error in process_image_with_gemini: {str(e)}")
+        print(f"Error type: {type(e)}")
         raise
 
 
@@ -211,6 +194,13 @@ async def handle_callback(request: Request):
                 msg = event.message.text
                 add_to_history(user_id, "user", msg, conversation_history)
                 response = await process_text_to_LLM(msg, user_id)
+                # print(f"Raw LLM response: {repr(response)}")
+                if not response or not response.strip():
+                    response = "Sorry, the response was too long or could not be generated. Please try a shorter or simpler request."
+                elif response.strip().startswith(
+                    "```"
+                ) and not response.strip().endswith("```"):
+                    response += "\n```"  # Close the code block
                 add_to_history(user_id, "assistant", response, conversation_history)
                 reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
