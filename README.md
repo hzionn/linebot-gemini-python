@@ -17,7 +17,7 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
 - Python 3
 - FastAPI
 - LINE Messaging API
-- Google Vertex AI (Gemini 2.0 Flash)
+- Google Vertex AI
 - LangChain
 - Aiohttp
 - PIL (Python Imaging Library)
@@ -52,7 +52,7 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
    uvicorn main:app --reload
    ```
 
-6. Start the ngrok tunnel (if using local development):
+6. Start the ngrok tunnel (for local development) and change the webhook URL in Line Messaging API:
 
    ```bash
    ngrok http 8000
