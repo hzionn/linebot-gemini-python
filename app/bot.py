@@ -221,11 +221,11 @@ async def handle_callback(request: Request):
                     )
                     image_data = await message_content.content
                     image = PIL.Image.open(BytesIO(image_data))
-                    resized_image = resize_image(image)
+                    # image = resize_image(image, max_size=1024)
                     add_to_history(
                         user_id, "user", "[User sent an image]", conversation_history
                     )
-                    response = await process_image_to_LLM(resized_image, user_id)
+                    response = await process_image_to_LLM(image, user_id)
                     add_to_history(user_id, "assistant", response, conversation_history)
                     reply_msg = TextSendMessage(text=response)
                     await line_bot_api.reply_message(event.reply_token, reply_msg)

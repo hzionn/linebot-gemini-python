@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from linebot.models import MessageEvent
 
 
-def resize_image(image: PIL.Image.Image, max_size: int = 512) -> PIL.Image.Image:
+def resize_image(image: PIL.Image.Image, max_size: int = 1024) -> PIL.Image.Image:
     image.thumbnail((max_size, max_size))
     return image
 
