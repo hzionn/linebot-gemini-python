@@ -176,7 +176,7 @@ async def handle_callback(request: Request):
                     print("✓ Gemini Vision processing complete")
 
                     # Add a more descriptive user message
-                    add_to_history(user_id, "user", "Please analyze this image")
+                    add_to_history(user_id, "user", "[User sent an image]")
                     # Add a more focused assistant response
                     add_to_history(user_id, "assistant", response)
 
