@@ -10,10 +10,14 @@ from fastapi import FastAPI, HTTPException, Request
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_vertexai import ChatVertexAI
+from langchain.tools import StructuredTool
 from linebot import AsyncLineBotApi, WebhookParser
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextSendMessage
+from pydantic import BaseModel, Field
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate
 
 from app.config import (
     CHANNEL_ACCESS_TOKEN,
@@ -25,13 +29,20 @@ from app.config import (
     MAX_CHAT_HISTORY,
 )
 from app.prompt import TEXT_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
-from app.utils import add_to_history, get_user_id, resize_image, build_langchain_history
+from app.utils import (
+    add_to_history,
+    get_user_id,
+    # resize_image,
+    build_langchain_history,
+    cleanup_inactive_histories,
+)
 
 # Global variables for LINE Bot
 line_bot_api = None
 parser = None
 text_model = None
 vision_model = None
+agent_executor = None
 
 # Store conversation history and last activity timestamps
 conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
@@ -44,10 +55,32 @@ CLEANUP_INTERVAL = timedelta(hours=1)  # How often to run the cleanup
 last_cleanup = datetime.now()
 
 
+class GetCurrentTimeSchema(BaseModel):
+    """Get the current time in a specific timezone."""
+    timezone: str = Field(default="Asia/Taipei", description="Timezone name, e.g., Asia/Taipei")
+
+
+def get_current_time_pydantic(timezone: str = "Asia/Taipei") -> str:
+    from datetime import datetime
+    import pytz
+    tz = pytz.timezone(timezone)
+    return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+
+
+tools = [
+    StructuredTool.from_function(
+        func=get_current_time_pydantic,
+        name="get_current_time",
+        description="Get the current time in a specific timezone",
+        args_schema=GetCurrentTimeSchema,
+    )
+]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup and cleanup on shutdown."""
-    global line_bot_api, parser, text_model, vision_model
+    global line_bot_api, parser, text_model, vision_model, agent_executor
 
     # Initialize LINE Bot
     session = aiohttp.ClientSession()
@@ -69,6 +102,24 @@ async def lifespan(app: FastAPI):
         location=GOOGLE_LOCATION,
         max_output_tokens=1024,
     )
+
+    # Create the agent prompt
+    agent_prompt = ChatPromptTemplate.from_messages([
+        ("system", TEXT_SYSTEM_PROMPT),
+        ("human", "{input}"),
+        ("placeholder", "{agent_scratchpad}")
+    ])
+
+    # Create the agent
+    agent = create_tool_calling_agent(
+        llm=text_model,
+        tools=tools,
+        prompt=agent_prompt,
+    )
+
+    # Create the agent executor
+    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
     yield
     # Cleanup on shutdown
     if session:
@@ -79,39 +130,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-def cleanup_inactive_histories():
-    """Remove conversation histories for users inactive for more than INACTIVE_TIMEOUT."""
-    global last_cleanup
-    now = datetime.now()
-
-    # Run cleanup only at specified intervals
-    if now - last_cleanup < CLEANUP_INTERVAL:
-        return
-
-    inactive_users = []
-    for user_id, last_time in last_activity.items():
-        if now - last_time > INACTIVE_TIMEOUT:
-            inactive_users.append(user_id)
-
-    for user_id in inactive_users:
-        if user_id in conversation_history:
-            del conversation_history[user_id]
-        del last_activity[user_id]
-
-    last_cleanup = now
-    if inactive_users:
-        print(f"Cleaned up chat for {len(inactive_users)} inactive users")
-
-
-async def process_text_to_LLM(text: str, user_id: str) -> str:
-    """Process text using Gemini Text model and return the response."""
-    if text_model is None:
-        return "Text model not initialized."
-    history = build_langchain_history(user_id, conversation_history)
-    history.append(HumanMessage(content=text))
-    history = [SystemMessage(content=TEXT_SYSTEM_PROMPT)] + history
-    response = text_model.invoke(history)
-    return str(response.content)
+async def process_text_to_LLM(text: str, user_id: str) -> dict:
+    """Process text using Gemini Text model and return the response via agent workflow."""
+    if agent_executor is None:
+        return {"type": "error", "content": "Agent not initialized."}
+    result = agent_executor.invoke({"input": text})
+    return {"type": "text", "content": str(result["output"])}
 
 
 async def process_image_to_LLM(image: PIL.Image.Image, user_id: str) -> str:
@@ -172,7 +196,13 @@ async def handle_callback(request: Request):
         events = [events]
 
     # Run periodic cleanup of inactive user histories
-    cleanup_inactive_histories()
+    cleanup_inactive_histories(
+        last_cleanup,
+        last_activity,
+        CLEANUP_INTERVAL,
+        INACTIVE_TIMEOUT,
+        conversation_history,
+    )
 
     for event in events:
         if not isinstance(event, MessageEvent):
@@ -193,14 +223,14 @@ async def handle_callback(request: Request):
             if event.message.type == "text":
                 msg = event.message.text
                 add_to_history(user_id, "user", msg, conversation_history)
-                response = await process_text_to_LLM(msg, user_id)
-                # print(f"Raw LLM response: {repr(response)}")
+                llm_result = await process_text_to_LLM(msg, user_id)
+                response = llm_result["content"]
+                if llm_result["type"] == "error":
+                    pass  # Optionally log error
                 if not response or not response.strip():
                     response = "Sorry, the response was too long or could not be generated. Please try a shorter or simpler request."
-                elif response.strip().startswith(
-                    "```"
-                ) and not response.strip().endswith("```"):
-                    response += "\n```"  # Close the code block
+                # elif response.strip().startswith("```") and not response.strip().endswith("```"):
+                #     response += "\n```"
                 add_to_history(user_id, "assistant", response, conversation_history)
                 reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)

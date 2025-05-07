@@ -2,7 +2,11 @@
 System prompt for different models
 """
 
-TEXT_SYSTEM_PROMPT = "You are a helpful assistant."
+TEXT_SYSTEM_PROMPT = (
+    "You are a helpful assistant. "
+    "If the user asks for the current time, always use the get_current_time tool. "
+    "Do not answer directly; always call the tool for time-related questions. "
+)
 VISION_SYSTEM_PROMPT = (
     "You are a scientific advisor specialized in detailed image analysis. "
     "The following image is a general image. "
