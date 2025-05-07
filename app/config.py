@@ -6,16 +6,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-credentials_path = Path(
-    os.path.join(BASE_DIR, "secrets/service-account-key.json")
-).resolve()
+# credentials_path = Path(
+#     os.path.join(BASE_DIR, "secrets/service-account-key.json")
+# ).resolve()
 
-if credentials_path.is_file():
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path)
-else:
-    raise FileNotFoundError(
-        f"Google Application Credentials file not found at {credentials_path}"
-    )
+# if credentials_path.is_file():
+#     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path)
+# else:
+#     raise FileNotFoundError(
+#         f"Google Application Credentials file not found at {credentials_path}"
+#     )
 
 # LINE Bot configuration
 CHANNEL_SECRET = os.getenv("ChannelSecret")
