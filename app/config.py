@@ -23,14 +23,13 @@ CHANNEL_ACCESS_TOKEN = os.getenv("ChannelAccessToken")
 
 # Google Cloud configuration
 GOOGLE_PROJECT_ID = os.getenv("GOOGLE_PROJECT_ID")
-GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION", "us-central1")
+GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION")
 
-# Gemini model configuration
-GEMINI_TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL")
-GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL")
+# https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash
+GEMINI_TEXT_MODEL = "gemini-2.5-flash-preview-04-17"
+GEMINI_VISION_MODEL = "gemini-2.5-flash-preview-04-17"
 
-# Chat history configuration
-MAX_CHAT_HISTORY = int(os.getenv("MAX_CHAT_HISTORY", "10"))
+MAX_CHAT_HISTORY = 20
 
 # Validate required environment variables
 if not CHANNEL_SECRET:
@@ -39,7 +38,5 @@ if not CHANNEL_ACCESS_TOKEN:
     raise ValueError("ChannelAccessToken environment variable is required")
 if not GOOGLE_PROJECT_ID:
     raise ValueError("GOOGLE_PROJECT_ID environment variable is required")
-if not GEMINI_TEXT_MODEL:
-    raise ValueError("GEMINI_TEXT_MODEL environment variable is required")
-if not GEMINI_VISION_MODEL:
-    raise ValueError("GEMINI_VISION_MODEL environment variable is required")
+if not GOOGLE_LOCATION:
+    raise ValueError("GOOGLE_LOCATION environment variable is required")
