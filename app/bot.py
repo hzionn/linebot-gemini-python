@@ -1,13 +1,13 @@
 import base64
 from collections import defaultdict, deque
 from io import BytesIO
-from typing import Any, List, Optional, Union
 
 import aiohttp
 import PIL.Image
 from fastapi import FastAPI, HTTPException, Request
-from langchain.schema.messages import HumanMessage, SystemMessage
-from langchain_core.messages import SystemMessage, HumanMessage
+
+# from langchain.schema.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_vertexai import ChatVertexAI
 from linebot import AsyncLineBotApi, WebhookParser
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
@@ -23,6 +23,7 @@ from app.config import (
     GOOGLE_PROJECT_ID,
     MAX_CHAT_HISTORY,
 )
+from app.utils import add_to_history, get_user_id, resize_image, build_langchain_history
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -52,28 +53,19 @@ vision_model = ChatVertexAI(
 conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
 
 
-def get_user_id(event: MessageEvent) -> Optional[str]:
-    """Get user ID from LINE event."""
-    return getattr(event.source, "user_id", None)
+async def process_text_to_LLM(text: str, user_id: str) -> str:
+    """Process text using Gemini Text model and return the response."""
+    # Build conversation history
+    history = build_langchain_history(user_id, conversation_history)
+    # Append the new user message
+    history.append(HumanMessage(content=text))
+    # Add a system message at the start
+    history = [SystemMessage(content="You are a helpful assistant.")] + history
+    response = text_model.invoke(history)
+    return str(response.content)
 
 
-def build_langchain_history(user_id: str) -> List[Any]:
-    """Build LangChain message history from stored conversation."""
-    history = []
-    for role, msg in conversation_history[user_id]:
-        if role == "user":
-            history.append(HumanMessage(content=msg))
-        else:
-            history.append(SystemMessage(content=msg))
-    return history
-
-
-def add_to_history(user_id: str, role: str, msg: Union[str, List[Any]]) -> None:
-    """Add message to conversation history."""
-    conversation_history[user_id].append((role, str(msg)))
-
-
-async def process_image_with_gemini(image: PIL.Image.Image) -> str:
+async def process_image_to_LLM(image: PIL.Image.Image, user_id: str) -> str:
     """Process image using Gemini Vision model and return the description."""
     try:
         # Convert PIL Image to base64
@@ -81,8 +73,25 @@ async def process_image_with_gemini(image: PIL.Image.Image) -> str:
         image.save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
 
-        # Prepare your messages
-        messages = [
+        # Build conversation history (with placeholders)
+        history = build_langchain_history(user_id, conversation_history)
+        # Append the actual image message as the latest user message
+        history.append(
+            HumanMessage(
+                content=[
+                    {
+                        "type": "text",
+                        "text": "Please analyze this image and provide a structured summary.",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_str}"},
+                    },
+                ]
+            )
+        )
+        # Add a system message at the start if desired
+        history = [
             SystemMessage(
                 content=(
                     "You are a scientific advisor specialized in detailed image analysis. "
@@ -94,17 +103,10 @@ async def process_image_with_gemini(image: PIL.Image.Image) -> str:
                     "If any information is missing or unclear, state so. "
                     "Keep your response concise and under 200 words."
                 )
-            ),
-            HumanMessage(
-                content=[
-                    {"type": "text", "text": "Please analyze this image and provide a structured summary."},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}},
-                ]
-            ),
-        ]
+            )
+        ] + history
 
-        # Call the model
-        response = vision_model.invoke(messages)
+        response = vision_model.invoke(history)
 
         if not response.content:
             raise ValueError("Empty response from model")
@@ -114,11 +116,6 @@ async def process_image_with_gemini(image: PIL.Image.Image) -> str:
     except Exception as e:
         print(f"Image processing error in process_image_with_gemini: {str(e)}")
         raise
-
-
-def resize_image(image: PIL.Image.Image, max_size: int = 512) -> PIL.Image.Image:
-    image.thumbnail((max_size, max_size))
-    return image
 
 
 @app.post("/")
@@ -136,6 +133,9 @@ async def handle_callback(request: Request):
     if not events:
         return "OK"
 
+    if not isinstance(events, list):
+        events = [events]
+
     for event in events:
         if not isinstance(event, MessageEvent):
             continue
@@ -147,44 +147,27 @@ async def handle_callback(request: Request):
         try:
             if event.message.type == "text":
                 msg = event.message.text
-                add_to_history(user_id, "user", msg)
-                history = build_langchain_history(user_id)
-                history = [
-                    SystemMessage(content="You are a helpful assistant.")
-                ] + history
-                response = text_model.invoke(history)
-                add_to_history(user_id, "assistant", response.content)
-                reply_msg = TextSendMessage(text=response.content)
+                response = await process_text_to_LLM(msg, user_id)
+                add_to_history(user_id, "assistant", response, conversation_history)
+                reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
             elif event.message.type == "image":
                 try:
-                    print("Starting image processing...")
                     message_content = await line_bot_api.get_message_content(
                         event.message.id
                     )
-                    print("✓ Image received from LINE")
                     image_data = await message_content.content
                     image = PIL.Image.open(BytesIO(image_data))
-                    print(
-                        f"✓ Image converted to PIL format: {image.format} {image.size}"
-                    )
-                    print("Processing with Gemini Vision...")
                     resized_image = resize_image(image)
-                    response = await process_image_with_gemini(resized_image)
-                    if not response:
-                        raise ValueError("Empty response from Gemini")
-                    print("✓ Gemini Vision processing complete")
-
-                    # Add a more descriptive user message
-                    add_to_history(user_id, "user", "[User sent an image]")
-                    # Add a more focused assistant response
-                    add_to_history(user_id, "assistant", response)
-
+                    add_to_history(
+                        user_id, "user", "[User sent an image]", conversation_history
+                    )
+                    response = await process_image_to_LLM(resized_image, user_id)
+                    add_to_history(user_id, "assistant", response, conversation_history)
                     reply_msg = TextSendMessage(text=response)
                     await line_bot_api.reply_message(event.reply_token, reply_msg)
-                    print("✓ Response sent to LINE")
                 except Exception as img_error:
-                    print(f"❌ Image processing error: {str(img_error)}")
+                    print(f"Image processing error: {str(img_error)}")
                     error_msg = TextSendMessage(
                         text="Sorry, I encountered an error while processing your image. Please try again."
                     )
