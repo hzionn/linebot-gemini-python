@@ -48,7 +48,7 @@ last_cleanup = datetime.now()
 async def lifespan(app: FastAPI):
     """Initialize services on startup and cleanup on shutdown."""
     global line_bot_api, parser, text_model, vision_model
-    
+
     # Initialize LINE Bot
     session = aiohttp.ClientSession()
     async_http_client = AiohttpAsyncHttpClient(session)
@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI):
     # Cleanup on shutdown
     if session:
         await session.close()
+
 
 # Initialize FastAPI app
 app = FastAPI(lifespan=lifespan)
@@ -174,7 +175,9 @@ async def handle_callback(request: Request):
     body = body.decode()
 
     try:
-        assert parser is not None, "LINE SDK Parser not initialized. Check application startup."
+        assert (
+            parser is not None
+        ), "LINE SDK Parser not initialized. Check application startup."
         events = parser.parse(body, signature)
     except InvalidSignatureError:
         raise HTTPException(status_code=400, detail="Invalid signature")
@@ -201,7 +204,9 @@ async def handle_callback(request: Request):
 
         try:
             if line_bot_api is None:
-                raise HTTPException(status_code=500, detail="LINE Bot API not initialized.")
+                raise HTTPException(
+                    status_code=500, detail="LINE Bot API not initialized."
+                )
             if event.message.type == "text":
                 msg = event.message.text
                 add_to_history(user_id, "user", msg, conversation_history)
