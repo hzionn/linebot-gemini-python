@@ -7,3 +7,5 @@ PRIVATE
 google-cloud-sdk/
 secrets/
 .github/
+.vscode/
+.cursor/
