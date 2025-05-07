@@ -1,13 +1,21 @@
-FROM python:3.10.12
+FROM python:3.10.12-slim
 
-# 將專案複製到容器中
-COPY . /app
+# Set working directory
 WORKDIR /app
 
-# 安裝必要的套件
-RUN pip install --upgrade pip
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the rest of the application
+COPY . .
+
+# Set environment variables
+ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
+
+# Expose the port
 EXPOSE 8080
-CMD uvicorn app:app --host=0.0.0.0 --port=$PORT
+
+# Run the application
+CMD exec uvicorn app.bot:app --host 0.0.0.0 --port ${PORT} --workers 1

@@ -1,5 +1,6 @@
 import base64
 from collections import defaultdict, deque
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from io import BytesIO
 
@@ -25,29 +26,11 @@ from app.config import (
 )
 from app.utils import add_to_history, get_user_id, resize_image, build_langchain_history
 
-# Initialize FastAPI app
-app = FastAPI()
-
-# Initialize LINE Bot
-session = aiohttp.ClientSession()
-async_http_client = AiohttpAsyncHttpClient(session)
-line_bot_api = AsyncLineBotApi(CHANNEL_ACCESS_TOKEN, async_http_client)
-parser = WebhookParser(CHANNEL_SECRET)
-
-# Initialize LangChain Vertex AI models
-text_model = ChatVertexAI(
-    model_name=GEMINI_TEXT_MODEL,
-    project=GOOGLE_PROJECT_ID,
-    location=GOOGLE_LOCATION,
-    max_output_tokens=1024,
-)
-
-vision_model = ChatVertexAI(
-    model_name=GEMINI_VISION_MODEL,
-    project=GOOGLE_PROJECT_ID,
-    location=GOOGLE_LOCATION,
-    max_output_tokens=1024,
-)
+# Global variables for LINE Bot
+line_bot_api = None
+parser = None
+text_model = None
+vision_model = None
 
 # Store conversation history and last activity timestamps
 conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
@@ -59,6 +42,40 @@ INACTIVE_TIMEOUT = timedelta(
 )  # Time after which inactive user history is cleared
 CLEANUP_INTERVAL = timedelta(hours=1)  # How often to run the cleanup
 last_cleanup = datetime.now()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize services on startup and cleanup on shutdown."""
+    global line_bot_api, parser, text_model, vision_model
+    
+    # Initialize LINE Bot
+    session = aiohttp.ClientSession()
+    async_http_client = AiohttpAsyncHttpClient(session)
+    line_bot_api = AsyncLineBotApi(CHANNEL_ACCESS_TOKEN, async_http_client)
+    parser = WebhookParser(CHANNEL_SECRET)
+
+    # Initialize LangChain Vertex AI models
+    text_model = ChatVertexAI(
+        model_name=GEMINI_TEXT_MODEL,
+        project=GOOGLE_PROJECT_ID,
+        location=GOOGLE_LOCATION,
+        max_output_tokens=1024,
+    )
+
+    vision_model = ChatVertexAI(
+        model_name=GEMINI_VISION_MODEL,
+        project=GOOGLE_PROJECT_ID,
+        location=GOOGLE_LOCATION,
+        max_output_tokens=1024,
+    )
+    yield
+    # Cleanup on shutdown
+    if session:
+        await session.close()
+
+# Initialize FastAPI app
+app = FastAPI(lifespan=lifespan)
 
 
 def cleanup_inactive_histories():
@@ -89,6 +106,8 @@ def cleanup_inactive_histories():
 
 async def process_text_to_LLM(text: str, user_id: str) -> str:
     """Process text using Gemini Text model and return the response."""
+    if text_model is None:
+        return "Text model not initialized."
     history = build_langchain_history(user_id, conversation_history)
     history.append(HumanMessage(content=text))
     history = [SystemMessage(content="You are a helpful assistant.")] + history
@@ -98,6 +117,8 @@ async def process_text_to_LLM(text: str, user_id: str) -> str:
 
 async def process_image_to_LLM(image: PIL.Image.Image, user_id: str) -> str:
     """Process image using Gemini Vision model and return the description."""
+    if vision_model is None:
+        return "Vision model not initialized."
     try:
         buffered = BytesIO()
         image.save(buffered, format="JPEG")
@@ -153,6 +174,7 @@ async def handle_callback(request: Request):
     body = body.decode()
 
     try:
+        assert parser is not None, "LINE SDK Parser not initialized. Check application startup."
         events = parser.parse(body, signature)
     except InvalidSignatureError:
         raise HTTPException(status_code=400, detail="Invalid signature")
@@ -178,6 +200,8 @@ async def handle_callback(request: Request):
         last_activity[user_id] = datetime.now()
 
         try:
+            if line_bot_api is None:
+                raise HTTPException(status_code=500, detail="LINE Bot API not initialized.")
             if event.message.type == "text":
                 msg = event.message.text
                 add_to_history(user_id, "user", msg, conversation_history)
@@ -213,3 +237,9 @@ async def handle_callback(request: Request):
             print(f"Error processing event: {str(e)}")
 
     return "OK"
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
