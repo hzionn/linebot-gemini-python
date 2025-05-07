@@ -1,12 +1,12 @@
 import base64
 from collections import defaultdict, deque
+from datetime import datetime, timedelta
 from io import BytesIO
 
 import aiohttp
 import PIL.Image
 from fastapi import FastAPI, HTTPException, Request
 
-# from langchain.schema.messages import HumanMessage, SystemMessage
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_vertexai import ChatVertexAI
 from linebot import AsyncLineBotApi, WebhookParser
@@ -49,17 +49,48 @@ vision_model = ChatVertexAI(
     max_output_tokens=1024,
 )
 
-# Store conversation history
+# Store conversation history and last activity timestamps
 conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
+last_activity = defaultdict(lambda: datetime.now())
+
+# Configure history cleanup settings
+INACTIVE_TIMEOUT = timedelta(
+    hours=24
+)  # Time after which inactive user history is cleared
+CLEANUP_INTERVAL = timedelta(hours=1)  # How often to run the cleanup
+last_cleanup = datetime.now()
+
+
+def cleanup_inactive_histories():
+    """Remove conversation histories for users inactive for more than INACTIVE_TIMEOUT."""
+    global last_cleanup
+    now = datetime.now()
+
+    # Run cleanup only at specified intervals
+    if now - last_cleanup < CLEANUP_INTERVAL:
+        return
+
+    inactive_users = []
+    for user_id, last_time in last_activity.items():
+        if now - last_time > INACTIVE_TIMEOUT:
+            inactive_users.append(user_id)
+
+    for user_id in inactive_users:
+        if user_id in conversation_history:
+            del conversation_history[user_id]
+        del last_activity[user_id]
+
+    last_cleanup = now
+    if inactive_users:
+        print(
+            f"Cleaned up conversation history for {len(inactive_users)} inactive users"
+        )
 
 
 async def process_text_to_LLM(text: str, user_id: str) -> str:
     """Process text using Gemini Text model and return the response."""
-    # Build conversation history
     history = build_langchain_history(user_id, conversation_history)
-    # Append the new user message
     history.append(HumanMessage(content=text))
-    # Add a system message at the start
     history = [SystemMessage(content="You are a helpful assistant.")] + history
     response = text_model.invoke(history)
     return str(response.content)
@@ -68,14 +99,11 @@ async def process_text_to_LLM(text: str, user_id: str) -> str:
 async def process_image_to_LLM(image: PIL.Image.Image, user_id: str) -> str:
     """Process image using Gemini Vision model and return the description."""
     try:
-        # Convert PIL Image to base64
         buffered = BytesIO()
         image.save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
 
-        # Build conversation history (with placeholders)
         history = build_langchain_history(user_id, conversation_history)
-        # Append the actual image message as the latest user message
         history.append(
             HumanMessage(
                 content=[
@@ -90,7 +118,6 @@ async def process_image_to_LLM(image: PIL.Image.Image, user_id: str) -> str:
                 ]
             )
         )
-        # Add a system message at the start if desired
         history = [
             SystemMessage(
                 content=(
@@ -136,6 +163,9 @@ async def handle_callback(request: Request):
     if not isinstance(events, list):
         events = [events]
 
+    # Run periodic cleanup of inactive user histories
+    cleanup_inactive_histories()
+
     for event in events:
         if not isinstance(event, MessageEvent):
             continue
@@ -144,9 +174,13 @@ async def handle_callback(request: Request):
         if not user_id:
             continue
 
+        # Update last activity timestamp for this user
+        last_activity[user_id] = datetime.now()
+
         try:
             if event.message.type == "text":
                 msg = event.message.text
+                add_to_history(user_id, "user", msg, conversation_history)
                 response = await process_text_to_LLM(msg, user_id)
                 add_to_history(user_id, "assistant", response, conversation_history)
                 reply_msg = TextSendMessage(text=response)
@@ -177,9 +211,5 @@ async def handle_callback(request: Request):
 
         except Exception as e:
             print(f"Error processing event: {str(e)}")
-            error_msg = TextSendMessage(
-                text="An error occurred while processing your request."
-            )
-            await line_bot_api.reply_message(event.reply_token, error_msg)
 
     return "OK"
