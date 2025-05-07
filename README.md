@@ -28,8 +28,8 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
 1. **Clone the repository to your local machine:**
 
    ```bash
-   git clone <your-repo-url>
-   cd <your-repo-directory>
+   git clone https://github.com/hzionn/linebot-gemini-python.git
+   cd linebot-gemini-python
    ```
 
 2. **Set up your environment:**
