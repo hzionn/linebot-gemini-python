@@ -1,6 +1,8 @@
 import base64
 from contextlib import asynccontextmanager
 from io import BytesIO
+from collections import defaultdict, deque
+# from datetime import datetime
 
 import aiohttp
 import PIL.Image
@@ -25,7 +27,7 @@ from app.config import (
 )
 from app.prompt import TEXT_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
 from app.tools import tools
-from app.utils import ConversationManager, get_user_id
+from app.utils import add_to_history, build_langchain_history, get_user_id
 
 # Global variables for LINE Bot
 line_bot_api = None
@@ -34,12 +36,9 @@ text_model = None
 vision_model = None
 agent_executor = None
 
-# Initialize conversation manager
-conversation_manager = ConversationManager(
-    max_history=MAX_CHAT_HISTORY,
-    cleanup_interval=3600,  # 1 hour
-    inactive_timeout=86400,  # 24 hours
-)
+# Store conversation history and last activity timestamps
+conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
+# last_activity = defaultdict(lambda: datetime.now())
 
 
 @asynccontextmanager
@@ -114,7 +113,7 @@ async def process_image_to_LLM(image: PIL.Image.Image, user_id: str) -> str:
         image.save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
 
-        history = conversation_manager.build_langchain_history(user_id)
+        history = build_langchain_history(user_id, conversation_history)
         message_content = [
             {
                 "type": "text",
@@ -162,9 +161,6 @@ async def handle_callback(request: Request):
     if not isinstance(events, list):
         events = [events]
 
-    # Run periodic cleanup of inactive user histories
-    conversation_manager.cleanup_inactive_histories()
-
     for event in events:
         if not isinstance(event, MessageEvent):
             continue
@@ -174,7 +170,7 @@ async def handle_callback(request: Request):
             continue
 
         # Update last activity timestamp for this user
-        conversation_manager.update_activity(user_id)
+        # last_activity[user_id] = datetime.now()
 
         try:
             if line_bot_api is None:
@@ -183,12 +179,12 @@ async def handle_callback(request: Request):
                 )
             if event.message.type == "text":
                 msg = event.message.text
-                conversation_manager.add_to_history(user_id, "user", msg)
+                add_to_history(user_id, "user", msg, conversation_history)
                 llm_result = await process_text_to_LLM(msg, user_id)
                 response = llm_result["content"]
                 if not response or not response.strip():
                     response = "Sorry, the response was too long or could not be generated. Please try a shorter or simpler request."
-                conversation_manager.add_to_history(user_id, "assistant", response)
+                add_to_history(user_id, "assistant", response, conversation_history)
                 reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
             elif event.message.type == "image":
@@ -198,11 +194,11 @@ async def handle_callback(request: Request):
                     )
                     image_data = await message_content.content
                     image = PIL.Image.open(BytesIO(image_data))
-                    conversation_manager.add_to_history(
-                        user_id, "user", "[User sent an image]"
+                    add_to_history(
+                        user_id, "user", "[User sent an image]", conversation_history
                     )
                     response = await process_image_to_LLM(image, user_id)
-                    conversation_manager.add_to_history(user_id, "assistant", response)
+                    add_to_history(user_id, "assistant", response, conversation_history)
                     reply_msg = TextSendMessage(text=response)
                     await line_bot_api.reply_message(event.reply_token, reply_msg)
                 except Exception as img_error:
