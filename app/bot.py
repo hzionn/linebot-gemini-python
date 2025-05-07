@@ -1,14 +1,11 @@
 import base64
-from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
 from io import BytesIO
 
 import aiohttp
 import PIL.Image
 from fastapi import FastAPI, HTTPException, Request
 from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain.tools import StructuredTool
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_vertexai import ChatVertexAI
@@ -16,15 +13,19 @@ from linebot import AsyncLineBotApi, WebhookParser
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextSendMessage
-from pydantic import BaseModel, Field
 
-from app.config import (CHANNEL_ACCESS_TOKEN, CHANNEL_SECRET,
-                        GEMINI_TEXT_MODEL, GEMINI_VISION_MODEL,
-                        GOOGLE_LOCATION, GOOGLE_PROJECT_ID, MAX_CHAT_HISTORY)
+from app.config import (
+    CHANNEL_ACCESS_TOKEN,
+    CHANNEL_SECRET,
+    GEMINI_TEXT_MODEL,
+    GEMINI_VISION_MODEL,
+    GOOGLE_LOCATION,
+    GOOGLE_PROJECT_ID,
+    MAX_CHAT_HISTORY,
+)
 from app.prompt import TEXT_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
-from app.utils import (add_to_history,  # resize_image,
-                       build_langchain_history, cleanup_inactive_histories,
-                       get_user_id)
+from app.tools import tools
+from app.utils import ConversationManager, get_user_id
 
 # Global variables for LINE Bot
 line_bot_api = None
@@ -33,42 +34,12 @@ text_model = None
 vision_model = None
 agent_executor = None
 
-# Store conversation history and last activity timestamps
-conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
-last_activity = defaultdict(lambda: datetime.now())
-
-# Configure history cleanup settings
-# Time after which inactive user history is cleared
-INACTIVE_TIMEOUT = timedelta(hours=24)
-CLEANUP_INTERVAL = timedelta(hours=1)  # How often to run the cleanup
-last_cleanup = datetime.now()
-
-
-class GetCurrentTimeSchema(BaseModel):
-    """Get the current time in a specific timezone."""
-
-    timezone: str = Field(
-        default="Asia/Taipei", description="Timezone name, e.g., Asia/Taipei"
-    )
-
-
-def get_current_time_pydantic(timezone: str = "Asia/Taipei") -> str:
-    from datetime import datetime
-
-    import pytz
-
-    tz = pytz.timezone(timezone)
-    return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-
-
-tools = [
-    StructuredTool.from_function(
-        func=get_current_time_pydantic,
-        name="get_current_time",
-        description="Get the current time in a specific timezone",
-        args_schema=GetCurrentTimeSchema,
-    )
-]
+# Initialize conversation manager
+conversation_manager = ConversationManager(
+    max_history=MAX_CHAT_HISTORY,
+    cleanup_interval=3600,  # 1 hour
+    inactive_timeout=86400,  # 24 hours
+)
 
 
 @asynccontextmanager
@@ -143,7 +114,7 @@ async def process_image_to_LLM(image: PIL.Image.Image, user_id: str) -> str:
         image.save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
 
-        history = build_langchain_history(user_id, conversation_history)
+        history = conversation_manager.build_langchain_history(user_id)
         message_content = [
             {
                 "type": "text",
@@ -192,13 +163,7 @@ async def handle_callback(request: Request):
         events = [events]
 
     # Run periodic cleanup of inactive user histories
-    cleanup_inactive_histories(
-        last_cleanup,
-        last_activity,
-        CLEANUP_INTERVAL,
-        INACTIVE_TIMEOUT,
-        conversation_history,
-    )
+    conversation_manager.cleanup_inactive_histories()
 
     for event in events:
         if not isinstance(event, MessageEvent):
@@ -209,7 +174,7 @@ async def handle_callback(request: Request):
             continue
 
         # Update last activity timestamp for this user
-        last_activity[user_id] = datetime.now()
+        conversation_manager.update_activity(user_id)
 
         try:
             if line_bot_api is None:
@@ -218,16 +183,12 @@ async def handle_callback(request: Request):
                 )
             if event.message.type == "text":
                 msg = event.message.text
-                add_to_history(user_id, "user", msg, conversation_history)
+                conversation_manager.add_to_history(user_id, "user", msg)
                 llm_result = await process_text_to_LLM(msg, user_id)
                 response = llm_result["content"]
-                if llm_result["type"] == "error":
-                    pass  # Optionally log error
                 if not response or not response.strip():
                     response = "Sorry, the response was too long or could not be generated. Please try a shorter or simpler request."
-                # elif response.strip().startswith("```") and not response.strip().endswith("```"):
-                #     response += "\n```"
-                add_to_history(user_id, "assistant", response, conversation_history)
+                conversation_manager.add_to_history(user_id, "assistant", response)
                 reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
             elif event.message.type == "image":
@@ -237,12 +198,11 @@ async def handle_callback(request: Request):
                     )
                     image_data = await message_content.content
                     image = PIL.Image.open(BytesIO(image_data))
-                    # image = resize_image(image, max_size=1024)
-                    add_to_history(
-                        user_id, "user", "[User sent an image]", conversation_history
+                    conversation_manager.add_to_history(
+                        user_id, "user", "[User sent an image]"
                     )
                     response = await process_image_to_LLM(image, user_id)
-                    add_to_history(user_id, "assistant", response, conversation_history)
+                    conversation_manager.add_to_history(user_id, "assistant", response)
                     reply_msg = TextSendMessage(text=response)
                     await line_bot_api.reply_message(event.reply_token, reply_msg)
                 except Exception as img_error:
