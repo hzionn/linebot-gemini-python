@@ -1,12 +1,12 @@
 # Linebot Assistant with LangChain and Vertex AI
 
-> This project originated from a Google Developer Group (Build with AI) workshop by Evan Lin focused on AI integration, specifically introducing Gemini and its implementation with LINE Bot. The initial repository was a basic template provided for quick deployment during the workshop.
-> After the workshop, I saw an opportunity to transform this starter project into something more personal and comprehensive. This project serves as both a practical implementation of LLM (Large Language Model) techniques and a learning platform for exploring AI integration in real-world applications.
-> The goal is to continuously enhance and customize this bot, incorporating new features and learning opportunities along the way. It's not just about building a LINE bot - it's about understanding and mastering the integration of advanced AI capabilities into practical applications.
-
 ## Project Background
 
 This project is a LINE bot that uses Google's Vertex AI Gemini models through LangChain to generate responses to both text and image inputs.
+
+> This project originated from a Google Developer Group (Build with AI) workshop by Evan Lin focused on AI integration, specifically introducing Gemini and its implementation with LINE Bot. The initial repository was a basic template provided for quick deployment during the workshop.
+> After the workshop, I saw an opportunity to transform this starter project into something more personal and comprehensive. This project serves as both a practical implementation of LLM (Large Language Model) techniques and a learning platform for exploring AI integration in real-world applications.
+> The goal is to continuously enhance and customize this bot, incorporating new features and learning opportunities along the way. It's not just about building a LINE bot - it's about understanding and mastering the integration of advanced AI capabilities into practical applications.
 
 ## Technologies Used
 
