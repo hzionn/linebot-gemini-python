@@ -6,6 +6,7 @@ __all__ = ["tools"]
 
 from langchain.tools import StructuredTool
 from pydantic import BaseModel, Field
+from langchain_google_community.search import GoogleSearchAPIWrapper, GoogleSearchRun
 
 
 class GetCurrentTimeSchema(BaseModel):
@@ -15,24 +16,11 @@ class GetCurrentTimeSchema(BaseModel):
 
 
 def get_current_time(timezone: str = "Asia/Taipei") -> str:
-    """Get the current time in a specific timezone."""
     from datetime import datetime
     import pytz
 
     tz = pytz.timezone(timezone)
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-
-
-class GoogleSearchSchema(BaseModel):
-    query: str = Field(description="The query to search the web for")
-
-
-def google_search(query: str) -> str:
-    """Search the web for the given query."""
-    from langchain_google_community import GoogleSearchRun, GoogleSearchAPIWrapper
-
-    search = GoogleSearchRun(api_wrapper=GoogleSearchAPIWrapper())
-    return search.run(query)
 
 
 class ReminderSchema(BaseModel):
@@ -41,9 +29,26 @@ class ReminderSchema(BaseModel):
 
 
 def set_reminder(message: str, time: str) -> str:
-    """Set a reminder for the user"""
-    # TODO: Implement the reminder functionality
     return f"Reminder set for {time}: {message}"
+
+
+class GoogleSearchSchema(BaseModel):
+    query: str = Field(description="The query to search the public web for")
+
+
+def google_search(query: str) -> str:
+    """Search the public web using Google Custom Search API."""
+    from dotenv import load_dotenv
+    import os
+
+    load_dotenv()
+
+    wrapper = GoogleSearchAPIWrapper(
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        google_cse_id=os.getenv("GOOGLE_CSE_ID"),
+    )
+    search = GoogleSearchRun(api_wrapper=wrapper)
+    return search.run(query)
 
 
 tools = [
@@ -62,7 +67,7 @@ tools = [
     StructuredTool.from_function(
         func=google_search,
         name="google_search",
-        description="Search the web for the given query",
+        description="Search the public web using Google Custom Search API",
         args_schema=GoogleSearchSchema,
     ),
 ]
