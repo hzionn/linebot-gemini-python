@@ -98,6 +98,7 @@ async def process_text_to_LLM(text: str, user_id: str) -> dict:
     """Process text using Gemini Text model and return the response via agent workflow."""
     if agent_executor is None:
         return {"type": "error", "content": "Agent not initialized."}
+    print(f"Using model: {agent_executor.name}")
     history = build_langchain_history(user_id, conversation_history)
     history.append(HumanMessage(content=text))
     history = [SystemMessage(content=TEXT_SYSTEM_PROMPT)] + history
