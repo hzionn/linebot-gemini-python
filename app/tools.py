@@ -23,6 +23,18 @@ def get_current_time(timezone: str = "Asia/Taipei") -> str:
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
 
+class GoogleSearchSchema(BaseModel):
+    query: str = Field(description="The query to search the web for")
+
+
+def google_search(query: str) -> str:
+    """Search the web for the given query."""
+    from langchain_google_community import GoogleSearchRun, GoogleSearchAPIWrapper
+
+    search = GoogleSearchRun(api_wrapper=GoogleSearchAPIWrapper())
+    return search.run(query)
+
+
 class ReminderSchema(BaseModel):
     message: str = Field(description="The message to remind the user")
     time: str = Field(description="The time to remind the user, e.g., 10:00")
@@ -43,8 +55,14 @@ tools = [
     ),
     StructuredTool.from_function(
         func=set_reminder,
-        name="set_reminder",
-        description="Set a reminder for the user",
+        name="set_reminder_placeholder",
+        description="Placeholder for set a reminder for the user",
         args_schema=ReminderSchema,
+    ),
+    StructuredTool.from_function(
+        func=google_search,
+        name="google_search",
+        description="Search the web for the given query",
+        args_schema=GoogleSearchSchema,
     ),
 ]
