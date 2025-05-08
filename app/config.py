@@ -26,8 +26,8 @@ GOOGLE_PROJECT_ID = os.getenv("GOOGLE_PROJECT_ID")
 GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION")
 
 # https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash
-GEMINI_TEXT_MODEL = "gemini-2.5-flash-preview-04-17"
-GEMINI_VISION_MODEL = "gemini-2.5-flash-preview-04-17"
+GEMINI_TEXT_MODEL = "gemini-2.5-pro-preview-05-06"
+GEMINI_VISION_MODEL = "gemini-2.5-pro-preview-05-06"
 
 MAX_CHAT_HISTORY = 20
 

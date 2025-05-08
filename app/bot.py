@@ -2,7 +2,6 @@ import base64
 from contextlib import asynccontextmanager
 from io import BytesIO
 from collections import defaultdict, deque
-# from datetime import datetime
 
 import aiohttp
 import PIL.Image
@@ -38,7 +37,6 @@ agent_executor = None
 
 # Store conversation history and last activity timestamps
 conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
-# last_activity = defaultdict(lambda: datetime.now())
 
 
 @asynccontextmanager
@@ -172,9 +170,6 @@ async def handle_callback(request: Request):
         if not user_id:
             continue
 
-        # Update last activity timestamp for this user
-        # last_activity[user_id] = datetime.now()
-
         try:
             if line_bot_api is None:
                 raise HTTPException(
@@ -190,6 +185,7 @@ async def handle_callback(request: Request):
                 add_to_history(user_id, "assistant", response, conversation_history)
                 reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
+
             elif event.message.type == "image":
                 try:
                     message_content = await line_bot_api.get_message_content(
