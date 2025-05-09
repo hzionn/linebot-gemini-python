@@ -1,8 +1,11 @@
+import os
 import base64
+import pickle
+import asyncio
 from contextlib import asynccontextmanager
 from io import BytesIO
 from collections import defaultdict, deque
-
+from datetime import timedelta, datetime, UTC
 import aiohttp
 import PIL.Image
 from fastapi import FastAPI, HTTPException, Request
@@ -26,7 +29,7 @@ from app.config import (
 )
 from app.prompt import TEXT_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
 from app.tools import tools
-from app.utils import add_to_history, build_langchain_history, get_user_id
+from app.utils import build_langchain_history, get_user_id, add_to_history
 
 # Global variables for LINE Bot
 line_bot_api = None
@@ -35,8 +38,79 @@ text_model = None
 vision_model = None
 agent_executor = None
 
-# Store conversation history and last activity timestamps
-conversation_history = defaultdict(lambda: deque(maxlen=MAX_CHAT_HISTORY))
+ENV = os.getenv("ENV", "prod")
+HISTORY_BASE_PATH = "/history/history/" if ENV == "prod" else "history"
+INACTIVITY_THRESHOLD = timedelta(minutes=10)
+last_activity = {}  # Dictionary to track last activity timestamps
+
+
+def deque_factory():
+    return deque(maxlen=MAX_CHAT_HISTORY)
+
+
+conversation_history = defaultdict(deque_factory)
+
+
+async def sync_inactive_users():
+    while True:
+        now = datetime.now(UTC)
+        for user_id, last_time in list(last_activity.items()):
+            if now - last_time > INACTIVITY_THRESHOLD:
+                history = conversation_history.get(user_id)
+                if history:
+                    file_path = os.path.join(HISTORY_BASE_PATH, f"{user_id}.pkl")
+                    try:
+                        with open(file_path, "wb") as f:
+                            pickle.dump(history, f)
+                        print(f"Saved history for user {user_id}")
+                    except Exception as e:
+                        print(f"Error saving history for user {user_id}: {e}")
+                    print(f"Deleted in-memory history for user {user_id}")
+                    del conversation_history[user_id]
+                    del last_activity[user_id]
+        await asyncio.sleep(60)  # Check every minute
+
+
+def load_user_history(user_id: str):
+    file_path = os.path.join(HISTORY_BASE_PATH, f"{user_id}.pkl")
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "rb") as f:
+                conversation_history[user_id] = pickle.load(f)
+            print(f"Loaded history for user {user_id}")
+        except Exception as e:
+            print(f"Error loading history for user {user_id}: {e}")
+            conversation_history[user_id] = deque_factory()
+            print(f"Created new history for user {user_id} after load error")
+    else:
+        conversation_history[user_id] = deque_factory()
+        print(f"Created new history for user {user_id}")
+    last_activity[user_id] = datetime.now(UTC)
+
+
+def save_user_history(user_id: str):
+    """Save user conversation history to disk with error handling."""
+    history = conversation_history.get(user_id)
+    if not history:
+        return
+
+    file_path = os.path.join(HISTORY_BASE_PATH, f"{user_id}.pkl")
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as f:
+            pickle.dump(history, f)
+    except Exception as e:
+        print(f"Error saving history for user {user_id}: {e}")
+
+
+def cleanup_inactive_users():
+    now = datetime.now(UTC)
+    for user_id in list(last_activity.keys()):
+        if now - last_activity[user_id] > INACTIVITY_THRESHOLD:
+            # Save history before removing
+            save_user_history(user_id)
+            del conversation_history[user_id]
+            del last_activity[user_id]
 
 
 @asynccontextmanager
@@ -44,13 +118,20 @@ async def lifespan(app: FastAPI):
     """Initialize services on startup and cleanup on shutdown."""
     global line_bot_api, parser, text_model, vision_model, agent_executor
 
+    # Ensure history directory exists
+    try:
+        os.makedirs(HISTORY_BASE_PATH, exist_ok=True)
+        print(f"Ensured history directory exists: {HISTORY_BASE_PATH}")
+    except Exception as e:
+        print(f"Error creating history directory: {e}")
+
     # Initialize LINE Bot
     session = aiohttp.ClientSession()
     async_http_client = AiohttpAsyncHttpClient(session)
     line_bot_api = AsyncLineBotApi(CHANNEL_ACCESS_TOKEN, async_http_client)
     parser = WebhookParser(CHANNEL_SECRET)
 
-    # Initialize LangChain Vertex AI models
+    print(f"Using model: {GEMINI_TEXT_MODEL}")
     text_model = ChatVertexAI(
         model_name=GEMINI_TEXT_MODEL,
         project=GOOGLE_PROJECT_ID,
@@ -84,10 +165,26 @@ async def lifespan(app: FastAPI):
     # Create the agent executor
     agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
 
+    # Start background task to sync inactive users
+    inactive_sync_task = asyncio.create_task(sync_inactive_users())
+
     yield
+
+    # Save all histories before shutdown
+    print("Saving all conversation histories before shutdown...")
+    for user_id in list(conversation_history.keys()):
+        save_user_history(user_id)
+
     # Cleanup on shutdown
     if session:
         await session.close()
+
+    # Cancel background task
+    inactive_sync_task.cancel()
+    try:
+        await inactive_sync_task
+    except asyncio.CancelledError:
+        pass
 
 
 # Initialize FastAPI app
@@ -99,7 +196,6 @@ async def process_text_to_LLM(text: str, user_id: str) -> dict:
     # print(f"Text system prompt: {TEXT_SYSTEM_PROMPT}")
     if agent_executor is None:
         return {"type": "error", "content": "Agent not initialized."}
-    print(f"Using model: {GEMINI_TEXT_MODEL}")
     history = build_langchain_history(user_id, conversation_history)
     history.append(HumanMessage(content=text))
     history = [SystemMessage(content=TEXT_SYSTEM_PROMPT)] + history
@@ -172,6 +268,13 @@ async def handle_callback(request: Request):
         if not user_id:
             continue
 
+        # Load user history if not already loaded
+        if user_id not in conversation_history:
+            load_user_history(user_id)
+        else:
+            # Update last activity timestamp
+            last_activity[user_id] = datetime.now(UTC)
+
         try:
             if line_bot_api is None:
                 raise HTTPException(
@@ -179,12 +282,20 @@ async def handle_callback(request: Request):
                 )
             if event.message.type == "text":
                 msg = event.message.text
-                add_to_history(user_id, "user", msg, conversation_history)
+                add_to_history(
+                    user_id, "user", msg, conversation_history, last_activity
+                )
+                # Update last activity timestamp after adding to history
+                last_activity[user_id] = datetime.now(UTC)
                 llm_result = await process_text_to_LLM(msg, user_id)
                 response = llm_result["content"]
                 if not response or not response.strip():
                     response = "Sorry, the response was too long or could not be generated. Please try a shorter or simpler request."
-                add_to_history(user_id, "assistant", response, conversation_history)
+                add_to_history(
+                    user_id, "assistant", response, conversation_history, last_activity
+                )
+                # Update last activity timestamp after adding to history
+                last_activity[user_id] = datetime.now(UTC)
                 response = response.replace("\\n", "\n")
                 reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
@@ -197,10 +308,24 @@ async def handle_callback(request: Request):
                     image_data = await message_content.content
                     image = PIL.Image.open(BytesIO(image_data))
                     add_to_history(
-                        user_id, "user", "[User sent an image]", conversation_history
+                        user_id,
+                        "user",
+                        "[User sent an image]",
+                        conversation_history,
+                        last_activity,
                     )
+                    # Update last activity timestamp after adding to history
+                    last_activity[user_id] = datetime.now(UTC)
                     response = await process_image_to_LLM(image, user_id)
-                    add_to_history(user_id, "assistant", response, conversation_history)
+                    add_to_history(
+                        user_id,
+                        "assistant",
+                        response,
+                        conversation_history,
+                        last_activity,
+                    )
+                    # Update last activity timestamp after adding to history
+                    last_activity[user_id] = datetime.now(UTC)
                     response = response.replace("\\n", "\n")
                     reply_msg = TextSendMessage(text=response)
                     await line_bot_api.reply_message(event.reply_token, reply_msg)

@@ -5,7 +5,7 @@ System prompt for different models
 import os
 
 ENV = os.getenv("ENV", "prod")
-PROMPT_BASE_PATH = "/prompts/prompts/" if ENV == "prod" else "app/prompts"
+PROMPT_BASE_PATH = "/prompts/prompts/" if ENV == "prod" else "prompts"
 
 
 def load_prompt(file_name: str) -> str:
