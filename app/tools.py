@@ -19,6 +19,7 @@ def get_current_time(timezone: str = "Asia/Taipei") -> str:
     from datetime import datetime
     import pytz
 
+    print("Using get current time tool")
     tz = pytz.timezone(timezone)
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -29,6 +30,7 @@ class ReminderSchema(BaseModel):
 
 
 def set_reminder(message: str, time: str) -> str:
+    print("Using set reminder tool")
     return f"Reminder set for {time}: {message}"
 
 
@@ -43,6 +45,7 @@ def google_search(query: str) -> str:
 
     load_dotenv()
 
+    print("Using google search tool")
     wrapper = GoogleSearchAPIWrapper(
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         google_cse_id=os.getenv("GOOGLE_CSE_ID"),
