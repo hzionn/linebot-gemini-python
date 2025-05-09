@@ -1,8 +1,8 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
+from datetime import datetime, UTC
 
 import PIL.Image
-from langchain_core.messages import (AIMessage, HumanMessage, SystemMessage,
-                                     ToolMessage)
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from linebot.models import MessageEvent
 
 
@@ -43,10 +43,17 @@ def build_langchain_history(user_id: str, conversation_history: dict) -> List[An
 
 
 def add_to_history(
-    user_id: str, role: str, msg: Any, conversation_history: dict
+    user_id: str,
+    role: str,
+    msg: Any,
+    conversation_history: dict,
+    last_activity: Optional[Dict[str, datetime]] = None,
 ) -> None:
-    """Add message to conversation history."""
+    """Add message to conversation history and update last activity timestamp."""
     try:
         conversation_history[user_id].append((role, msg))
+        # Update last_activity timestamp if provided
+        if last_activity is not None:
+            last_activity[user_id] = datetime.now(UTC)
     except Exception as e:
         print(f"Error adding to history for user {user_id}: {str(e)}")
