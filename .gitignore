@@ -7,3 +7,4 @@ PRIVATE
 google-cloud-sdk/
 secrets/
 .cursor/
+prompts/

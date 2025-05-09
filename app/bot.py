@@ -96,6 +96,7 @@ app = FastAPI(lifespan=lifespan)
 
 async def process_text_to_LLM(text: str, user_id: str) -> dict:
     """Process text using Gemini Text model and return the response via agent workflow."""
+    # print(f"Text system prompt: {TEXT_SYSTEM_PROMPT}")
     if agent_executor is None:
         return {"type": "error", "content": "Agent not initialized."}
     print(f"Using model: {GEMINI_TEXT_MODEL}")
