@@ -29,7 +29,7 @@ GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION")
 GEMINI_TEXT_MODEL = "gemini-2.5-pro-preview-05-06"
 GEMINI_VISION_MODEL = "gemini-2.5-pro-preview-05-06"
 
-MAX_CHAT_HISTORY = 20
+MAX_CHAT_HISTORY = 50
 
 # Validate required environment variables
 if not CHANNEL_SECRET:

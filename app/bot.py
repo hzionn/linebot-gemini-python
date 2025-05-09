@@ -185,6 +185,7 @@ async def handle_callback(request: Request):
                 if not response or not response.strip():
                     response = "Sorry, the response was too long or could not be generated. Please try a shorter or simpler request."
                 add_to_history(user_id, "assistant", response, conversation_history)
+                response = response.replace("\\n", "\n")
                 reply_msg = TextSendMessage(text=response)
                 await line_bot_api.reply_message(event.reply_token, reply_msg)
 
@@ -200,6 +201,7 @@ async def handle_callback(request: Request):
                     )
                     response = await process_image_to_LLM(image, user_id)
                     add_to_history(user_id, "assistant", response, conversation_history)
+                    response = response.replace("\\n", "\n")
                     reply_msg = TextSendMessage(text=response)
                     await line_bot_api.reply_message(event.reply_token, reply_msg)
                 except Exception as img_error:
