@@ -11,3 +11,5 @@ secrets/
 .cursor/
 prompts/
 history/
+copilot-instructions.md
+node_modules/
