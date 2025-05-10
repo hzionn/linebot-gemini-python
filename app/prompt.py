@@ -1,14 +1,13 @@
 """
-System prompt for different models
+System prompt for different models.
 """
 
 import os
 
-ENV = os.getenv("ENV", "prod")
-PROMPT_BASE_PATH = "/prompts/prompts/" if ENV == "prod" else "prompts"
+from app.config import PROMPT_BASE_PATH
 
 
-def load_prompt(file_name: str) -> str:
+def _load_prompt(file_name: str) -> str:
     file_path = os.path.join(PROMPT_BASE_PATH, file_name)
     # print(f"Loading prompt from {file_path}")
     try:
@@ -20,13 +19,14 @@ def load_prompt(file_name: str) -> str:
         raise RuntimeError(f"Error loading prompt file '{file_path}': {e}")
 
 
-AUTHOR = load_prompt("author.txt")
-GENERAL_PROMPT = load_prompt("general_prompt.txt")
+_AUTHOR = _load_prompt("author.txt")
+_GENERAL_PROMPT = _load_prompt("general_prompt.txt")
+
 TEXT_SYSTEM_PROMPT = (
-    f"{load_prompt('text_system_prompt.txt')}\n"
-    f"{GENERAL_PROMPT}\n"
-    f"About the author: {AUTHOR}"
+    f"{_load_prompt('text_system_prompt.txt')}\n"
+    f"{_GENERAL_PROMPT}\n"
+    f"About the author: {_AUTHOR}"
 )
 VISION_SYSTEM_PROMPT = (
-    f"{load_prompt('vision_system_prompt.txt')}\n" f"{GENERAL_PROMPT}"
+    f"{_load_prompt('vision_system_prompt.txt')}\n" f"{_GENERAL_PROMPT}"
 )

@@ -1,12 +1,12 @@
 """
-Define tools for the agent
+Define tools for the agent.
 """
 
 __all__ = ["tools"]
 
 from langchain.tools import StructuredTool
-from pydantic import BaseModel, Field
 from langchain_google_community.search import GoogleSearchAPIWrapper, GoogleSearchRun
+from pydantic import BaseModel, Field
 
 
 class GetCurrentTimeSchema(BaseModel):
@@ -17,6 +17,7 @@ class GetCurrentTimeSchema(BaseModel):
 
 def get_current_time(timezone: str = "Asia/Taipei") -> str:
     from datetime import datetime
+
     import pytz
 
     print("Using get current time tool")
@@ -40,8 +41,9 @@ class GoogleSearchSchema(BaseModel):
 
 def google_search(query: str) -> str:
     """Search the public web using Google Custom Search API."""
-    from dotenv import load_dotenv
     import os
+
+    from dotenv import load_dotenv
 
     load_dotenv()
 
