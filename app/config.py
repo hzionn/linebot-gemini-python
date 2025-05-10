@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -25,13 +26,19 @@ CHANNEL_ACCESS_TOKEN = os.getenv("ChannelAccessToken")
 GOOGLE_PROJECT_ID = os.getenv("GOOGLE_PROJECT_ID")
 GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION")
 
+# Model names change frequently; always check for the latest version
 # https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash
 GEMINI_TEXT_MODEL = "gemini-2.5-pro-preview-05-06"
 GEMINI_VISION_MODEL = "gemini-2.5-pro-preview-05-06"
 
 MAX_CHAT_HISTORY = 50
 
-# Validate required environment variables
+ENV = os.getenv("ENV", "prod")
+INACTIVITY_THRESHOLD = timedelta(minutes=10)
+# TODO: better manage the mount volume path
+HISTORY_BASE_PATH = "/history/history/" if ENV == "prod" else "history"
+PROMPT_BASE_PATH = "/prompts/prompts/" if ENV == "prod" else "prompts"
+
 if not CHANNEL_SECRET:
     raise ValueError("ChannelSecret environment variable is required")
 if not CHANNEL_ACCESS_TOKEN:

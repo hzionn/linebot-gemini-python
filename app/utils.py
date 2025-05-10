@@ -1,9 +1,11 @@
-from typing import Any, List, Optional, Dict
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Optional
+import warnings
+import functools
 
 import PIL.Image
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from linebot.models import MessageEvent
+# from linebot.models import MessageEvent
 
 
 def resize_image(image: PIL.Image.Image, max_size: int = 1024) -> PIL.Image.Image:
@@ -11,9 +13,9 @@ def resize_image(image: PIL.Image.Image, max_size: int = 1024) -> PIL.Image.Imag
     return image
 
 
-def get_user_id(event: MessageEvent) -> Optional[str]:
-    """Get user ID from LINE event."""
-    return getattr(event.source, "user_id", None)
+# def get_user_id(event: MessageEvent) -> Optional[str]:
+#     """Get user ID from LINE event."""
+#     return getattr(event.source, "user_id", None)
 
 
 def build_langchain_history(user_id: str, conversation_history: dict) -> List[Any]:
@@ -57,3 +59,18 @@ def add_to_history(
             last_activity[user_id] = datetime.now(UTC)
     except Exception as e:
         print(f"Error adding to history for user {user_id}: {str(e)}")
+
+
+def deprecated(message: str):
+    """Decorator to mark functions as deprecated."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(
+                f"{func.__name__} is deprecated. {message}",
+                category=DeprecationWarning,
+                stacklevel=2
+            )
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
