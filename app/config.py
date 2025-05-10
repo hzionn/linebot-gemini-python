@@ -26,10 +26,8 @@ CHANNEL_ACCESS_TOKEN = os.getenv("ChannelAccessToken")
 GOOGLE_PROJECT_ID = os.getenv("GOOGLE_PROJECT_ID")
 GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION")
 
-# Model names change frequently; always check for the latest version
-# https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash
-GEMINI_TEXT_MODEL = "gemini-2.5-pro-preview-05-06"
-GEMINI_VISION_MODEL = "gemini-2.5-pro-preview-05-06"
+GEMINI_TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-2.0-flash")
+GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL", "gemini-2.0-flash")
 
 MAX_CHAT_HISTORY = 50
 
