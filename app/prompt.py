@@ -1,5 +1,8 @@
 """
-System prompt for different models.
+System prompt utilities for different models.
+
+This module provides functions and constants for loading and composing
+system prompts used by various model types and LLM profiles (todo).
 """
 
 import os
@@ -8,6 +11,18 @@ from app.config import PROMPT_BASE_PATH
 
 
 def _load_prompt(file_name: str) -> str:
+    """
+    Load a prompt template from a file.
+
+    Args:
+        file_name (str): The name of the prompt file to load.
+
+    Returns:
+        str: The contents of the prompt file.
+
+    Raises:
+        RuntimeError: If the file is not found or cannot be read.
+    """
     file_path = os.path.join(PROMPT_BASE_PATH, file_name)
     # print(f"Loading prompt from {file_path}")
     try:
