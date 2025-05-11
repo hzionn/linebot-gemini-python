@@ -2,34 +2,27 @@
 
 ## Project Background
 
-This project is a LINE bot that uses Google's Vertex AI Gemini models through LangChain to generate responses to both text and image inputs.
+This project originated from a Google Developer Group (Build with AI) workshop by Evan Lin focused on AI integration, specifically introducing Gemini and its implementation with LINE Bot. The initial repository was a basic template provided for quick deployment during the workshop.
 
-> This project originated from a Google Developer Group (Build with AI) workshop by Evan Lin focused on AI integration, specifically introducing Gemini and its implementation with LINE Bot. The initial repository was a basic template provided for quick deployment during the workshop.
-> After the workshop, I saw an opportunity to transform this starter project into something more personal and comprehensive. This project serves as both a practical implementation of LLM (Large Language Model) techniques and a learning platform for exploring AI integration in real-world applications.
-> The goal is to continuously enhance and customize this bot, incorporating new features and learning opportunities along the way. It's not just about building a LINE bot - it's about understanding and mastering the integration of advanced AI capabilities into practical applications.
+After the workshop, the project was expanded into a more personal and comprehensive assistant, serving as both a practical implementation of LLM (Large Language Model) techniques and a learning platform for exploring AI integration in real-world applications. The goal is to continuously enhance and customize this bot, incorporating new features and learning opportunities along the way.
 
-## Technologies Used
+## Overview
 
-- Python 3
-- FastAPI
-- LINE Messaging API
-- Google Vertex AI
-- LangChain
-- Aiohttp
-- PIL (Python Imaging Library)
-- Ngrok (for local development)
+This project is a LINE bot that leverages Google Vertex AI Gemini models (via LangChain) to provide advanced conversational and image analysis capabilities. It is designed for personal use, learning, and experimentation with LLMs and AI integration on messaging platforms.
 
 ## Features
 
-- Text message processing using Gemini AI in Traditional Chinese
-- Image analysis with scientific detail in Traditional Chinese
-- Integration with LINE Messaging API for easy mobile access
-- Built with FastAPI for efficient asynchronous processing
-- Chat history management
+- **Conversational AI:** Responds to user text messages using Gemini (Vertex AI) via LangChain.
+- **Image Understanding:** Analyzes images sent by users and provides structured, scientific responses.
+- **Per-User Chat History:** Maintains a recent message history for each user to enable context-aware conversations.
+- **Automatic History Management:** User histories are capped to a fixed number of messages and are automatically cleaned up for inactive users.
+- **Prompt System:** Uses customizable system prompts for both text and vision models, loaded from the `prompts/` directory.
+- **Agent Tools:** Supports tools such as current time lookup, Google Search and more to be added.
+- **Cloud Native:** Designed for deployment on Google Cloud Run, but can also run locally for development.
 
-## Setup
+## Quick Start
 
-1. **Clone the repository to your local machine:**
+1. **Clone the repository:**
 
    ```bash
    git clone https://github.com/hzionn/linebot-gemini-python.git
@@ -37,66 +30,57 @@ This project is a LINE bot that uses Google's Vertex AI Gemini models through La
    ```
 
 2. **Set up your environment:**
-   - Follow the steps in the [Environment Setup](#environment-setup) section to configure your environment variables.
+   - Copy `.env.template` to `.env` and fill in your credentials (for local development).
+   - For Cloud Run, set environment variables in the service configuration.
 
-3. **Set up Google Cloud:**
-   - Create a Google Cloud project
-   - Enable Vertex AI API
-   - Set up authentication (service account or application default credentials)
-
-4. **Install the required dependencies:**
+3. **Install dependencies:**
 
    ```bash
    pip install -r requirements.txt
    ```
 
-5. **Start the FastAPI server:**
+4. **Start the server locally:**
 
    ```bash
    uvicorn app:app --reload
    ```
 
-6. **(Local only) Start the ngrok tunnel and set the webhook URL in the LINE Messaging API:**
+5. **(Optional) Use ngrok for local webhook testing:**
 
    ```bash
    ngrok http 8000
    ```
 
-7. **Set up your LINE bot webhook URL to point to your server's endpoint.**
+6. **Set your LINE bot webhook URL** to your server endpoint.
 
-## Environment Setup
+## Deployment
 
-### Local Development
+- **Google Cloud Run:**
+  - Build and deploy using the provided Dockerfile.
+  - Set environment variables and secrets in Cloud Run.
+  - No database setup required; user histories are stored as files.
 
-1. Copy the example environment file and rename it:
+## Important Notes
 
-   ```sh
-   cp .env.template .env
-   ```
+- **Persistence:** User chat histories are stored as files in the `history/` directory (or a mounted volume in production). No external database is required.
+- **Chat History Limits:** Each user's history is capped (default: 50 messages). Inactive users' histories are periodically saved and removed from memory.
+- **Prompt Customization:** System prompts for both text and vision models can be customized by editing files in the `prompts/` directory.
+- **Tools:** The bot can access current time, set reminders (placeholder), and perform Google searches via agent tools.
+- **No Database:** All persistence is file-based. If you need to scale horizontally, use a shared volume for the `history/` directory.
+- **No User Profile/Character Selection Yet:** The bot currently does not support user-selectable LLM profiles or characters.
+- **No Modular Routers:** All logic is in a single FastAPI app file (`app/bot.py`).
 
-2. Open `.env` and fill in your credentials and configuration values.
-3. The `.env` file is required for local development only. **Do not commit your `.env` file to version control.**
+## Architecture
 
-### Cloud Run Deployment
+Architecture documentation is a TODO and will be updated in the future.
 
-- For Cloud Run, set environment variables and secrets directly in the Cloud Run service configuration (via the Google Cloud Console or `gcloud` CLI).
-- You do **not** need a `.env` file for Cloud Run.
+## Limitations & Future Directions
 
-## Deployment Options
+- No support for user-selectable LLM profiles/characters (planned).
+- No database integration; all persistence is file-based.
+- No admin interface or analytics.
+- All configuration is via environment variables or prompt files.
 
-### Google Cloud Run
+## License
 
-1. Install the Google Cloud SDK and authenticate with your Google Cloud account.
-2. Build the Docker image:
-
-   ```bash
-   gcloud builds submit --tag gcr.io/$GOOGLE_PROJECT_ID/linebot-gemini
-   ```
-
-3. Deploy the Docker image to Cloud Run:
-
-   ```bash
-   gcloud run deploy linebot-gemini --image gcr.io/$GOOGLE_PROJECT_ID/linebot-gemini --platform managed --region $GOOGLE_LOCATION --allow-unauthenticated
-   ```
-
-4. Set up your LINE bot webhook URL to point to the Cloud Run service URL.
+MIT License. See [LICENSE](LICENSE) for details.
