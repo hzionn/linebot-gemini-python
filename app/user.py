@@ -6,7 +6,7 @@ Mostly for managing conversation history.
 import asyncio
 import os
 import pickle
-from collections import deque
+from collections import deque, defaultdict
 from datetime import UTC, datetime
 from typing import Any, List, Optional
 
@@ -26,7 +26,7 @@ def get_user_id(event: MessageEvent) -> Optional[str]:
 
 
 def to_load_user_history(
-    user_id: str, last_activity: dict, conversation_history: dict
+    user_id: str, last_activity: dict, conversation_history: defaultdict
 ) -> bool:
     """
     Load user conversation history from disk.
@@ -58,7 +58,7 @@ def to_load_user_history(
     return True
 
 
-def _save_user_history(user_id: str, conversation_history: dict):
+def _save_user_history(user_id: str, conversation_history: defaultdict):
     """Save user conversation history to disk with error handling."""
     history = conversation_history.get(user_id)
     if not history:
@@ -75,7 +75,7 @@ def _save_user_history(user_id: str, conversation_history: dict):
 
 
 def add_to_history(
-    user_id: str, role: str, msg: Any, last_activity: dict, conversation_history: dict
+    user_id: str, role: str, msg: Any, last_activity: dict, conversation_history: defaultdict
 ) -> None:
     """Add message to conversation history and update last activity timestamp."""
     try:
@@ -87,7 +87,7 @@ def add_to_history(
 
 
 @deprecated("Use `sync_inactive_users` with asyncio instead.")
-def cleanup_inactive_users(last_activity: dict, conversation_history: dict):
+def cleanup_inactive_users(last_activity: dict, conversation_history: defaultdict):
     """Clean up inactive users and save their history."""
     now = datetime.now(UTC)
     for user_id in list(last_activity.keys()):
@@ -99,7 +99,7 @@ def cleanup_inactive_users(last_activity: dict, conversation_history: dict):
             print(f"Cleaned up inactive user {user_id}")
 
 
-async def sync_inactive_users(last_activity: dict, conversation_history: dict):
+async def sync_inactive_users(last_activity: dict, conversation_history: defaultdict):
     """Background task to periodically save inactive user histories and clean up memory."""
     while True:
         now = datetime.now(UTC)
@@ -123,12 +123,12 @@ def ensure_history_path_exists():
         print(f"Error creating history directory: {e}")
 
 
-def get_user_history(user_id: str, conversation_history: dict) -> List[Any]:
+def get_user_history(user_id: str, conversation_history: defaultdict) -> List[Any]:
     """Get the user's conversation history in LangChain format."""
     return build_langchain_history(user_id, conversation_history)
 
 
-def user_exists(user_id: str, conversation_history: dict) -> bool:
+def user_exists(user_id: str, conversation_history: defaultdict) -> bool:
     """
     Check if a user exists in the conversation history.
     
@@ -143,7 +143,7 @@ def update_user_activity(user_id: str, last_activity: dict) -> None:
     last_activity[user_id] = datetime.now(UTC)
 
 
-def save_all_histories(conversation_history: dict):
+def save_all_histories(conversation_history: defaultdict):
     """Save all user conversation histories before shutdown."""
     print("Saving all conversation histories...")
     for user_id in list(conversation_history.keys()):
