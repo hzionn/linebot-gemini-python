@@ -39,19 +39,25 @@ This project is a LINE bot that leverages Google Vertex AI Gemini models (via La
    pip install -r requirements.txt
    ```
 
-4. **Start the server locally:**
+4. **Prompts and History:**
+
+   ```bash
+   make
+   ```
+
+5. **Start the server locally:**
 
    ```bash
    uvicorn app:app --reload
    ```
 
-5. **(Optional) Use ngrok for local webhook testing:**
+6. **(Optional) Use ngrok for local webhook testing:**
 
    ```bash
    ngrok http 8000
    ```
 
-6. **Set your LINE bot webhook URL** to your server endpoint.
+7. **Set your LINE bot webhook URL** to your server endpoint.
 
 ## Deployment
 
