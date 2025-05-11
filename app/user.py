@@ -75,7 +75,11 @@ def _save_user_history(user_id: str, conversation_history: defaultdict):
 
 
 def add_to_history(
-    user_id: str, role: str, msg: Any, last_activity: dict, conversation_history: defaultdict
+    user_id: str,
+    role: str,
+    msg: Any,
+    last_activity: dict,
+    conversation_history: defaultdict,
 ) -> None:
     """Add message to conversation history and update last activity timestamp."""
     try:
@@ -131,7 +135,7 @@ def get_user_history(user_id: str, conversation_history: defaultdict) -> List[An
 def user_exists(user_id: str, conversation_history: defaultdict) -> bool:
     """
     Check if a user exists in the conversation history.
-    
+
     Note: Currently unused, but kept for potential future implementation
     of user verification before processing.
     """
