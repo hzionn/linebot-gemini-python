@@ -10,3 +10,4 @@ pydantic
 tiktoken
 Pillow
 langchain-google-community>=0.0.5
+python-dotenv
