@@ -69,12 +69,11 @@ This project is a LINE bot that leverages Google Vertex AI Gemini models (via La
 ## Important Notes
 
 - **Persistence:** User chat histories are stored as files in the `history/` directory (or a mounted volume in production). No external database is required.
-- **Chat History Limits:** Each user's history is capped (default: 50 messages). Inactive users' histories are periodically saved and removed from memory.
+- **Chat History Limits:** Each user's history is capped (can be changed in `.env`). Inactive users' histories are periodically saved and removed from memory.
 - **Prompt Customization:** System prompts for both text and vision models can be customized by editing files in the `prompts/` directory.
-- **Tools:** The bot can access current time, set reminders (placeholder), and perform Google searches via agent tools.
+- **Tools:** The bot can access current time, set reminders (not implemented yet), and perform Google searches via agent tools.
 - **No Database:** All persistence is file-based. If you need to scale horizontally, use a shared volume for the `history/` directory.
 - **No User Profile/Character Selection Yet:** The bot currently does not support user-selectable LLM profiles or characters.
-- **No Modular Routers:** All logic is in a single FastAPI app file (`app/bot.py`).
 
 ## Architecture
 
