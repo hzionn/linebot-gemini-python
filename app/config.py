@@ -28,8 +28,9 @@ GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION")
 
 GEMINI_TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-2.0-flash")
 GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL", "gemini-2.0-flash")
+MAX_OUTPUT_TOKENS=os.getenv("MAX_OUTPUT_TOKENS", 512)
 
-MAX_CHAT_HISTORY = 50
+MAX_CHAT_HISTORY = os.getenv("MAX_CHAT_HISTORY", 10)
 
 ENV = os.getenv("ENV", "prod")
 INACTIVITY_THRESHOLD = timedelta(minutes=10)
