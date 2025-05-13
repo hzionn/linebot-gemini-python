@@ -64,14 +64,14 @@ async def lifespan(app: FastAPI):
         model_name=config.GEMINI_TEXT_MODEL,
         project=config.GOOGLE_PROJECT_ID,
         location=config.GOOGLE_LOCATION,
-        max_output_tokens=1024,
+        max_output_tokens=config.MAX_OUTPUT_TOKENS,
     )
 
     vision_model_g = ChatVertexAI(
         model_name=config.GEMINI_VISION_MODEL,
         project=config.GOOGLE_PROJECT_ID,
         location=config.GOOGLE_LOCATION,
-        max_output_tokens=1024,
+        max_output_tokens=config.MAX_OUTPUT_TOKENS,
     )
 
     agent_prompt = ChatPromptTemplate.from_messages(
