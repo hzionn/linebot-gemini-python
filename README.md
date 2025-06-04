@@ -77,7 +77,7 @@ This project is a LINE bot that leverages Google Vertex AI Gemini models (via La
 
 ## Architecture
 
-Architecture documentation is a TODO and will be updated in the future.
+See [docs/architecture.md](docs/architecture.md) for architecture details.
 
 ## Limitations & Future Directions
 
