@@ -10,38 +10,53 @@ import os
 from app.config import PROMPT_BASE_PATH
 
 
-def _load_prompt(file_name: str) -> str:
+DEFAULT_AUTHOR = "Anonymous"
+DEFAULT_GENERAL_PROMPT = (
+    "Respond concisely and helpfully to the user."
+)
+DEFAULT_TEXT_SYSTEM_PROMPT = "You are a helpful assistant."
+DEFAULT_VISION_SYSTEM_PROMPT = (
+    "You are a helpful assistant capable of understanding images."
+)
+
+
+def _load_prompt(file_name: str, default: str) -> str:
     """
-    Load a prompt template from a file.
-
+    Loads a prompt template from a file, returning a default string if unavailable.
+    
+    If the specified file is missing, empty, or cannot be read, a warning is printed and the provided default string is returned.
+    
     Args:
-        file_name (str): The name of the prompt file to load.
-
+        file_name: Name of the prompt file to load.
+        default: Default string to return if the file is missing, empty, or unreadable.
+    
     Returns:
-        str: The contents of the prompt file.
-
-    Raises:
-        RuntimeError: If the file is not found or cannot be read.
+        The contents of the prompt file, or the default string if the file is unavailable.
     """
     file_path = os.path.join(PROMPT_BASE_PATH, file_name)
-    # print(f"Loading prompt from {file_path}")
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
+            content = f.read()
+            if content.strip():
+                return content
+            print(f"Warning: prompt file {file_path} is empty, using default")
     except FileNotFoundError:
-        raise RuntimeError(f"Prompt file not found: {file_path}")
+        print(f"Warning: prompt file not found: {file_path}. Using default.")
     except Exception as e:
-        raise RuntimeError(f"Error loading prompt file '{file_path}': {e}")
+        print(
+            f"Warning: error reading prompt file '{file_path}': {e}. Using default."
+        )
+    return default
 
 
-_AUTHOR = _load_prompt("author.txt")
-_GENERAL_PROMPT = _load_prompt("general_prompt.txt")
+_AUTHOR = _load_prompt("author.txt", DEFAULT_AUTHOR)
+_GENERAL_PROMPT = _load_prompt("general_prompt.txt", DEFAULT_GENERAL_PROMPT)
 
 TEXT_SYSTEM_PROMPT = (
-    f"{_load_prompt('text_system_prompt.txt')}\n"
+    f"{_load_prompt('text_system_prompt.txt', DEFAULT_TEXT_SYSTEM_PROMPT)}\n"
     f"{_GENERAL_PROMPT}\n"
     f"About the author: {_AUTHOR}"
 )
 VISION_SYSTEM_PROMPT = (
-    f"{_load_prompt('vision_system_prompt.txt')}\n" f"{_GENERAL_PROMPT}"
+    f"{_load_prompt('vision_system_prompt.txt', DEFAULT_VISION_SYSTEM_PROMPT)}\n" f"{_GENERAL_PROMPT}"
 )
