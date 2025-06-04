@@ -22,16 +22,16 @@ DEFAULT_VISION_SYSTEM_PROMPT = (
 
 def _load_prompt(file_name: str, default: str) -> str:
     """
-    Load a prompt template from a file.
-
+    Loads a prompt template from a file, returning a default string if unavailable.
+    
+    If the specified file is missing, empty, or cannot be read, a warning is printed and the provided default string is returned.
+    
     Args:
-        file_name (str): The name of the prompt file to load.
-
+        file_name: Name of the prompt file to load.
+        default: Default string to return if the file is missing, empty, or unreadable.
+    
     Returns:
-        str: The contents of the prompt file.
-
-    Raises:
-        RuntimeError: If the file is not found or cannot be read.
+        The contents of the prompt file, or the default string if the file is unavailable.
     """
     file_path = os.path.join(PROMPT_BASE_PATH, file_name)
     try:
